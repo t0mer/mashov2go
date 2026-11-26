@@ -12,7 +12,7 @@ const redactedValue = "[redacted]"
 var piiKeys = map[string]bool{
 	"privatename": true, "familyname": true, "displayname": true, "name": true,
 	"userid": true, "idnumber": true, "eventuserid": true, "sendername": true,
-	"reporter": true, "teachername": true, "groupteachers": true,
+	"reporter": true, "teachername": true, "groupteachers": true, "lessonreporter": true,
 	"firstname": true, "lastname": true, "studentname": true, "birthdate": true,
 	"address": true, "phonenumber": true, "mobile": true, "eventtext": true,
 	"cellphone": true, "phone": true, "email": true, "username": true,
