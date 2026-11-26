@@ -1,4 +1,4 @@
-module github.com/t0mer/holocron
+module github.com/t0mer/mashov2go
 
 go 1.26.0
 

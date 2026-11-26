@@ -1,4 +1,4 @@
-// Command holocron is the Holocron service and its CLI.
+// Command mashov2go is the mashov2go service and its CLI.
 package main
 
 import (
@@ -12,19 +12,19 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
-	"github.com/t0mer/holocron/internal/mashov"
+	"github.com/t0mer/mashov2go/internal/mashov"
 )
 
 // version is injected at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
 const usage = `Usage:
-  holocron --version
-  holocron mashov schools [--q TEXT]
-  holocron mashov login --semel N --year Y --username U [--profile android|web]
-  holocron mashov get --semel N --year Y --username U <path> [--profile android|web]
+  mashov2go --version
+  mashov2go mashov schools [--q TEXT]
+  mashov2go mashov login --semel N --year Y --username U [--profile android|web]
+  mashov2go mashov get --semel N --year Y --username U <path> [--profile android|web]
 
-The password is read from HOLOCRON_MASHOV_PASSWORD, or prompted on a terminal.
+The password is read from MASHOV2GO_MASHOV_PASSWORD, or prompted on a terminal.
 All output is PII-redacted (CLAUDE.md §0.5).
 `
 
@@ -41,7 +41,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return errors.New("no command given")
 	}
 	if args[0] == "--version" || args[0] == "version" {
-		fmt.Fprintln(stdout, "holocron", version)
+		fmt.Fprintln(stdout, "mashov2go", version)
 		return nil
 	}
 	if args[0] != "mashov" || len(args) < 2 {
@@ -139,11 +139,11 @@ func (f sessionFlags) open(ctx context.Context) (*mashov.Client, *mashov.LoginRe
 }
 
 func readPassword() (string, error) {
-	if pw := os.Getenv("HOLOCRON_MASHOV_PASSWORD"); pw != "" {
+	if pw := os.Getenv("MASHOV2GO_MASHOV_PASSWORD"); pw != "" {
 		return pw, nil
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", errors.New("set HOLOCRON_MASHOV_PASSWORD or run in a terminal")
+		return "", errors.New("set MASHOV2GO_MASHOV_PASSWORD or run in a terminal")
 	}
 	fmt.Fprint(os.Stderr, "Mashov password: ")
 	b, err := term.ReadPassword(int(os.Stdin.Fd()))
