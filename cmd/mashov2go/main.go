@@ -8,12 +8,26 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
+	_ "time/tzdata"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
 	"github.com/t0mer/mashov2go/internal/mashov"
+	"github.com/t0mer/mashov2go/internal/schedule"
 )
+
+// Zone for civil dates. tzdata is embedded so scratch images work without a tz database.
+var jerusalem = mustLoadZone("Asia/Jerusalem")
+
+func mustLoadZone(name string) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		panic(err)
+	}
+	return loc
+}
 
 // version is injected at build time with -ldflags "-X main.version=...".
 var version = "dev"
@@ -23,6 +37,7 @@ const usage = `Usage:
   mashov2go mashov schools [--q TEXT]
   mashov2go mashov login --semel N --year Y --username U [--profile android|web]
   mashov2go mashov get --semel N --year Y --username U <path> [--profile android|web]
+  mashov2go mashov plan --semel N --year Y --username U [--child INDEX] [--date YYYY-MM-DD]
 
 The password is read from MASHOV2GO_MASHOV_PASSWORD, or prompted on a terminal.
 All output is PII-redacted (CLAUDE.md §0.5).
@@ -55,6 +70,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return cmdLogin(args[2:], stdout)
 	case "get":
 		return cmdGet(args[2:], stdout)
+	case "plan":
+		return cmdPlan(args[2:], stdout)
 	default:
 		fmt.Fprint(stderr, usage)
 		return fmt.Errorf("unknown mashov command %q", args[1])
@@ -189,4 +206,82 @@ func cmdGet(args []string, stdout io.Writer) error {
 	out := mashov.RedactJSON(b)
 	_, err = stdout.Write(append(out, '\n'))
 	return err
+}
+
+func cmdPlan(args []string, stdout io.Writer) error {
+	fs := pflag.NewFlagSet("plan", pflag.ContinueOnError)
+	sf := newSessionFlags(fs)
+	child := fs.Int("child", 0, "index of the child in the login's children list")
+	dateStr := fs.String("date", "", "school day to plan, YYYY-MM-DD (default: tomorrow, Asia/Jerusalem)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	day, err := planDay(*dateStr, time.Now().In(jerusalem))
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	c, res, err := sf.open(ctx)
+	if err != nil {
+		return err
+	}
+	kids := res.AccessToken.Children
+	if *child < 0 || *child >= len(kids) {
+		return fmt.Errorf("--child %d out of range: login has %d children", *child, len(kids))
+	}
+	kid := kids[*child]
+
+	lessons, err := c.Timetable(ctx, kid.ChildGUID)
+	if err != nil {
+		return fmt.Errorf("timetable: %w", err)
+	}
+	// Fetch a window around the day; the builder matches the exact date.
+	changes, err := c.TimetableChangesFor(ctx, kid.ChildGUID, day.AddDate(0, 0, -1), day.AddDate(0, 0, 2))
+	if err != nil {
+		return fmt.Errorf("timetable changes: %w", err)
+	}
+	bells, err := c.Bells(ctx)
+	if err != nil {
+		return fmt.Errorf("bells: %w", err)
+	}
+	holidays, err := c.Holidays(ctx)
+	if err != nil {
+		return fmt.Errorf("holidays: %w", err)
+	}
+	homework, err := c.Homework(ctx, kid.ChildGUID)
+	if err != nil {
+		return fmt.Errorf("homework: %w", err)
+	}
+
+	p := schedule.Build(schedule.Input{
+		Date: day, Lessons: lessons, Changes: changes, Bells: bells,
+		Holidays: holidays, Homework: homework, IncludeHomeworkGivenToday: true,
+	})
+	if p.Skip != "" {
+		fmt.Fprintf(stdout, "no plan for %s: %s", day.Format("2006-01-02"), p.Skip)
+		if p.HolidayName != "" {
+			fmt.Fprintf(stdout, " (%s)", p.HolidayName)
+		}
+		fmt.Fprintln(stdout)
+		return nil
+	}
+	out, err := schedule.Render("", schedule.ChildView{FirstName: kid.PrivateName, Plan: p})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, out)
+	return nil
+}
+
+// planDay parses --date, or returns the civil day after now in Asia/Jerusalem.
+func planDay(s string, now time.Time) (time.Time, error) {
+	if s == "" {
+		y, m, d := now.AddDate(0, 0, 1).Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC), nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("--date must be YYYY-MM-DD: %w", err)
+	}
+	return t, nil
 }
