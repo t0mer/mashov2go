@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"io/fs"
 	"path/filepath"
 	"testing"
 
@@ -35,8 +36,9 @@ func TestMigrationsApplyOnceAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("applied migrations = %d, err %v", n, err)
+	want := len(embeddedMigrations(t))
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != want {
+		t.Fatalf("applied migrations = %d, want %d, err %v", n, want, err)
 	}
 	_ = s.Close()
 	s2, err := Open(context.Background(), path, testSealer(t))
@@ -44,9 +46,22 @@ func TestMigrationsApplyOnceAndReopen(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	defer s2.Close()
-	if err := s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("after reopen migrations = %d, err %v", n, err)
+	if err := s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != want {
+		t.Fatalf("after reopen migrations = %d, want %d, err %v", n, want, err)
 	}
+}
+
+func embeddedMigrations(t *testing.T) []string {
+	t.Helper()
+	entries, err := fs.ReadDir(migrationFS, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
 }
 
 func TestSplitStatementsDropsComments(t *testing.T) {
