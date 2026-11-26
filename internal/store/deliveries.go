@@ -28,10 +28,14 @@ func (s *Store) EnqueueDelivery(ctx context.Context, d Delivery) (bool, error) {
 	if d.NextAt.IsZero() {
 		d.NextAt = time.Now().UTC()
 	}
+	// Status is pending unless the caller already knows the target is unreachable.
+	if d.Status == "" {
+		d.Status = "pending"
+	}
 	res, err := s.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO deliveries(event_id, member_id, channel, status, attempts, next_at, body)
-		 VALUES(?,?,?,?,?,?,?)`,
-		d.EventID, d.MemberID, d.Channel, "pending", 0, d.NextAt.UTC().Format(ts), d.Body)
+		`INSERT OR IGNORE INTO deliveries(event_id, member_id, channel, status, attempts, next_at, last_error, body)
+		 VALUES(?,?,?,?,?,?,?,?)`,
+		d.EventID, d.MemberID, d.Channel, d.Status, 0, d.NextAt.UTC().Format(ts), truncate(d.LastError, 500), d.Body)
 	if err != nil {
 		return false, err
 	}

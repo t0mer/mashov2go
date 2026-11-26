@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -56,4 +58,17 @@ func (s *Store) ListEvents(ctx context.Context, since time.Time, limit int) ([]E
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// EventIDByDedupe returns the id of the event stored under key, if any.
+func (s *Store) EventIDByDedupe(ctx context.Context, key string) (int64, bool, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM events WHERE dedupe_key = ?`, key).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return id, true, nil
 }
