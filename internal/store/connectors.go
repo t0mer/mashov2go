@@ -189,3 +189,20 @@ func clearDefaultTx(ctx context.Context, tx *sql.Tx, keep int64) error {
 		`UPDATE connectors SET is_default = 0 WHERE id <> ? AND type <> 'telegram'`, keep)
 	return err
 }
+
+// GetConnector returns one connector's metadata (no secrets).
+func (s *Store) GetConnector(ctx context.Context, id int64) (Connector, bool, error) {
+	var c Connector
+	var def, en int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, type, name, is_default, enabled FROM connectors WHERE id = ?`, id).
+		Scan(&c.ID, &c.Type, &c.Name, &def, &en)
+	if errors.Is(err, sql.ErrNoRows) {
+		return c, false, nil
+	}
+	if err != nil {
+		return c, false, err
+	}
+	c.IsDefault, c.Enabled = def == 1, en == 1
+	return c, true, nil
+}
