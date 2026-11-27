@@ -139,12 +139,7 @@ func (s *Source) login(ctx context.Context, c *mashov.Client, accountID int64) e
 	if err != nil {
 		return err
 	}
-	p := mashov.AndroidProfile
-	fields := mashov.DeviceFields{
-		AppName: p.AppName, APIVersion: p.APIVersion, AppVersion: p.AppVersion, AppBuild: p.AppBuild,
-		DeviceUUID: acc.DeviceUUID, DevicePlatform: p.DevicePlatform,
-		DeviceManufacturer: p.DeviceManufacturer, DeviceModel: p.DeviceModel, DeviceVersion: p.DeviceVersion,
-	}
+	fields := mashov.AndroidProfile.DeviceFields(acc.DeviceUUID)
 
 	var res *mashov.LoginResponse
 	if acc.DevicePass != "" {

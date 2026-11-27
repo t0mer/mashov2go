@@ -39,3 +39,13 @@ var WebProfile = Profile{
 	AppVersion: "3.8.72",
 	AppBuild:   "308720",
 }
+
+// DeviceFields returns the login device identity for this profile. Fields the
+// profile leaves empty (the web profile has no device fields) are omitted.
+func (p Profile) DeviceFields(deviceUUID string) DeviceFields {
+	return DeviceFields{
+		AppName: p.AppName, APIVersion: p.APIVersion, AppVersion: p.AppVersion, AppBuild: p.AppBuild,
+		DeviceUUID: deviceUUID, DevicePlatform: p.DevicePlatform, DeviceManufacturer: p.DeviceManufacturer,
+		DeviceModel: p.DeviceModel, DeviceVersion: p.DeviceVersion,
+	}
+}
