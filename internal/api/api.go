@@ -61,6 +61,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
 	s.accountRoutes(mux)
 	s.connectorRoutes(mux)
+	s.activityRoutes(mux)
 	if s.Settings != nil {
 		s.settingsRoutes(mux)
 	}
