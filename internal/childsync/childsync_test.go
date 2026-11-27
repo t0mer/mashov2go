@@ -1,4 +1,4 @@
-package gradesjob
+package childsync
 
 import (
 	"context"
@@ -15,9 +15,10 @@ import (
 	"github.com/t0mer/mashov2go/internal/syncer"
 )
 
-// fakeSource returns the grades set for each child, keyed by child member id.
+// fakeSource returns the records set for each child, keyed by child member id.
 type fakeSource struct {
 	grades map[int64][]mashov.Grade
+	behave map[int64][]mashov.Behave
 	fail   map[int64]bool
 }
 
@@ -26,6 +27,13 @@ func (f *fakeSource) Grades(_ context.Context, child family.Member, _, _ time.Ti
 		return nil, errors.New("mashov unavailable")
 	}
 	return f.grades[child.ID], nil
+}
+
+func (f *fakeSource) Behave(_ context.Context, child family.Member, _, _ time.Time) ([]mashov.Behave, error) {
+	if f.fail[child.ID] {
+		return nil, errors.New("mashov unavailable")
+	}
+	return f.behave[child.ID], nil
 }
 
 type env struct {
@@ -55,10 +63,10 @@ func setup(t *testing.T) *env {
 	par, _ := st.CreateMember(ctx, family.Member{Role: family.RoleParent, Name: "Parent", Language: "he",
 		Channel: family.ChannelWhatsApp, WhatsAppPhone: "972500000001", QuietStart: "22:30", QuietEnd: "06:30",
 		PlanTime: "19:30", Active: true})
-	src := &fakeSource{grades: map[int64][]mashov.Grade{}, fail: map[int64]bool{}}
+	src := &fakeSource{grades: map[int64][]mashov.Grade{}, behave: map[int64][]mashov.Behave{}, fail: map[int64]bool{}}
 	e := &env{st: st, src: src, kid: kid, parent: par, now: time.Date(2026, 11, 27, 10, 0, 0, 0, loc)}
 	e.svc = &Service{
-		Store: st, Source: src, Loc: loc,
+		Store: st, Loc: loc, Domains: []Domain{GradesDomain(src), BehaveDomain(src)},
 		Syncer: &syncer.Syncer{Store: st, Now: func() time.Time { return e.now }},
 		Now:    func() time.Time { return e.now },
 		Gap:    func() time.Duration { return 0 },
@@ -169,5 +177,44 @@ func TestRespectsGap(t *testing.T) {
 	e.now = e.now.Add(31 * time.Minute)
 	if n, _ := e.svc.RunDue(ctx); n != 1 {
 		t.Fatalf("not fetched after the gap: n=%d", n)
+	}
+}
+
+func TestNewBehaveRecordUsesSchoolWordingAndMuteIsPerCategory(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.src.behave[e.kid.ID] = []mashov.Behave{}
+	_, _ = e.svc.RunDue(ctx) // baseline
+
+	e.now = e.now.Add(time.Hour)
+	e.src.behave[e.kid.ID] = []mashov.Behave{{AchvaName: "איחור", LessonID: 7, EventCode: 21, Subject: "Math",
+		Lesson: 3, LessonDate: "2026-11-02T00:00:00", Justification: "bus"}}
+	if n, err := e.svc.RunDue(ctx); err != nil || n != 1 {
+		t.Fatalf("behave: n=%d err=%v", n, err)
+	}
+	d := e.pending(t)
+	if len(d) != 1 || d[0].MemberID != e.parent.ID {
+		t.Fatalf("deliveries = %+v", d)
+	}
+	for _, want := range []string{"איחור", "Math", "שיעור 3", "02/11", "bus"} {
+		if !strings.Contains(d[0].Body, want) {
+			t.Fatalf("body missing %q: %q", want, d[0].Body)
+		}
+	}
+
+	// Muting behaviour silences behaviour only: a new grade still reaches the parent.
+	if err := e.st.SetMute(ctx, e.parent.ID, e.kid.ID, family.CatBehave, true); err != nil {
+		t.Fatal(err)
+	}
+	e.now = e.now.Add(time.Hour)
+	e.src.behave[e.kid.ID] = append(e.src.behave[e.kid.ID], mashov.Behave{AchvaName: "הפרעה", LessonID: 8, EventCode: 30, Subject: "Art", Lesson: 1, LessonDate: "2026-11-03T00:00:00"})
+	e.src.grades[e.kid.ID] = []mashov.Grade{{ID: 1, GradingEventID: 9, SubjectName: "Math", Rate: 80}}
+	if _, err := e.svc.RunDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range e.pending(t) {
+		if strings.Contains(x.Body, "הפרעה") {
+			t.Fatal("muted behaviour category reached the parent")
+		}
 	}
 }
