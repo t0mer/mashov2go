@@ -124,3 +124,18 @@ func (r Renderer) Render(ctx context.Context, category, lang, audience string, d
 	}
 	return Execute(t, data)
 }
+
+// SampleData returns fixed example data for a category, used by the preview so
+// an admin can see a template before it is used.
+func SampleData(category string) map[string]any {
+	switch category {
+	case "grades":
+		return map[string]any{"child": "Demo Child", "subject": "Math", "event": "Quiz", "value": "92", "updated": false}
+	case "behave":
+		return map[string]any{"child": "Demo Child", "name": "איחור", "subject": "Math", "lesson": 3,
+			"date": "02/11", "justification": ""}
+	case "homework":
+		return map[string]any{"subject": "Math", "text": "pages 40-42", "remark": "", "date": "27/11"}
+	}
+	return map[string]any{}
+}

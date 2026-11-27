@@ -87,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	s.accountRoutes(mux)
 	s.connectorRoutes(mux)
 	s.activityRoutes(mux)
+	s.templateRoutes(mux)
 	if s.Settings != nil {
 		s.settingsRoutes(mux)
 	}
