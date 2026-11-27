@@ -368,7 +368,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 	// One Mashov source serves both the API and the plan job, so they share sessions.
 	mashovData := &mashovsource.Source{Store: st}
 	reg := metrics.NewRegistry()
-	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, Metrics: reg,
+	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, ChildData: mashovData, Metrics: reg,
 		SecureCookies: !*insecureCookies, TrustedProxies: trusted}
 	// The API owns /api, /healthz and /metrics; everything else is the admin UI.
 	root := http.NewServeMux()
