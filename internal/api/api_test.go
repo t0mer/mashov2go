@@ -293,3 +293,18 @@ func itoa(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
 }
+
+func TestMeReturnsCSRFForSessionOnly(t *testing.T) {
+	_, h := newServer(t)
+	cookie, csrf := signIn(t, h)
+	rec := call(h, http.MethodGet, "/api/v1/auth/me", nil, cookie, nil)
+	if got := decodeMap(t, rec.Body.String()); got["csrfToken"] != csrf {
+		t.Fatalf("me for session: %v", got)
+	}
+	tok := decodeMap(t, adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/tokens",
+		map[string]string{"name": "x", "scope": "read"}).Body.String())["token"].(string)
+	rec = call(h, http.MethodGet, "/api/v1/auth/me", nil, nil, map[string]string{"Authorization": "Bearer " + tok})
+	if strings.Contains(rec.Body.String(), "csrfToken") {
+		t.Fatalf("token caller got a CSRF token: %s", rec.Body.String())
+	}
+}

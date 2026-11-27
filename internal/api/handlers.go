@@ -110,9 +110,15 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// me describes the caller. A session caller also gets its CSRF token, so a page
+// reload can resume without signing in again.
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p := fromContext(r.Context())
-	writeJSON(w, http.StatusOK, map[string]string{"kind": p.kind, "scope": p.scope})
+	out := map[string]string{"kind": p.kind, "scope": p.scope}
+	if p.kind == "session" {
+		out["csrfToken"] = p.csrf
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // changePassword replaces the admin password and ends every other session.
