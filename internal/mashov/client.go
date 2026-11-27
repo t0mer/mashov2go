@@ -210,6 +210,22 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 // get runs a GET with retry on 429/5xx (jittered exponential backoff) and one
 // re-auth + replay on session expiry (CLAUDE.md §3.3).
 func (c *Client) get(ctx context.Context, path string, query url.Values) ([]byte, error) {
+	// A query written into the path ("students/x?take=5") is split off here. Left in
+	// the path it would be escaped and sent as part of the resource name.
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		inPath, err := url.ParseQuery(path[i+1:])
+		if err != nil {
+			return nil, fmt.Errorf("parsing query of %s: %w", path[:i], err)
+		}
+		merged := url.Values{}
+		for k, v := range inPath {
+			merged[k] = append(merged[k], v...)
+		}
+		for k, v := range query {
+			merged[k] = append(merged[k], v...)
+		}
+		query, path = merged, path[:i]
+	}
 	return c.getWith(ctx, path, query, true)
 }
 

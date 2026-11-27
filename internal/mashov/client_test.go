@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -296,5 +297,28 @@ func TestIsActiveDoesNotTriggerReauth(t *testing.T) {
 	}
 	if reauths != 0 {
 		t.Fatalf("IsActive triggered %d re-auths, want 0", reauths)
+	}
+}
+
+func TestGetSplitsQueryWrittenIntoPath(t *testing.T) {
+	var gotPath, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	c, err := NewClient(Options{BaseURL: srv.URL + "/api/", MinGap: time.Microsecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Get(context.Background(), "students/sg-1/grades?start=2026-09-01T00:00:00Z&take=5", url.Values{"skip": {"0"}}); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/api/students/sg-1/grades" {
+		t.Fatalf("path = %q", gotPath)
+	}
+	q, _ := url.ParseQuery(gotQuery)
+	if q.Get("start") != "2026-09-01T00:00:00Z" || q.Get("take") != "5" || q.Get("skip") != "0" {
+		t.Fatalf("query = %q", gotQuery)
 	}
 }
