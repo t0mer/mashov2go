@@ -59,6 +59,12 @@ func TestChildLinkRecipientsAndMutes(t *testing.T) {
 	if err != nil || found.ID != kid.ID {
 		t.Fatalf("ChildMemberFor = %+v, %v", found, err)
 	}
+	if accID, guid, ok, err := s.MemberLink(ctx, kid.ID); err != nil || !ok || accID != acc.ID || guid != "guid-1" {
+		t.Fatalf("MemberLink = %d %q %v %v", accID, guid, ok, err)
+	}
+	if _, _, ok, err := s.MemberLink(ctx, par.ID); err != nil || ok {
+		t.Fatalf("unlinked member: ok=%v err=%v", ok, err)
+	}
 
 	if err := s.SetRecipient(ctx, kid.ID, family.CatGrades, family.ToBoth); err != nil {
 		t.Fatal(err)

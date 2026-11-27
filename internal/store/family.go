@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/t0mer/mashov2go/internal/family"
@@ -193,4 +194,19 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// MemberLink returns the Mashov account and student a child member is linked to.
+// ok is false when the member has no link.
+func (s *Store) MemberLink(ctx context.Context, memberID int64) (accountID int64, childGUID string, ok bool, err error) {
+	err = s.db.QueryRowContext(ctx,
+		`SELECT account_id, child_guid FROM member_links WHERE member_id = ?`, memberID).
+		Scan(&accountID, &childGUID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, err
+	}
+	return accountID, childGUID, true, nil
 }
