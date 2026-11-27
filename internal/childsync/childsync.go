@@ -18,6 +18,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/schedule"
 	"github.com/t0mer/mashov2go/internal/store"
 	"github.com/t0mer/mashov2go/internal/syncer"
+	"github.com/t0mer/mashov2go/internal/templates"
 )
 
 // DefaultGap is how often a child's domains are fetched when no setting says otherwise.
@@ -32,9 +33,10 @@ type Domain struct {
 	Category string
 	// Fetch returns the child's records for a window, one value per record.
 	Fetch func(ctx context.Context, child family.Member, from, to time.Time) ([]any, error)
-	// Message renders an event of this domain for the family. kind is the event
-	// kind ("<domain>.new" or "<domain>.updated") and payload the stored record.
-	Message func(child, kind, payload string) (string, error)
+	// Data turns a stored record into template data. kind is the event kind
+	// ("<domain>.new" or "<domain>.updated") and payload the stored record. The
+	// message text is rendered per recipient from the domain's template.
+	Data func(child, kind, payload string) (map[string]any, error)
 }
 
 // Service runs the sync for every linked child and every domain.
@@ -46,6 +48,8 @@ type Service struct {
 	Domains []Domain
 	// Gap returns the time between two fetches of one child's domain; nil uses DefaultGap.
 	Gap func() time.Duration
+	// Templates renders the message text (nil uses the built-in defaults only).
+	Templates templates.Renderer
 
 	lastRun map[string]time.Time
 }
@@ -162,12 +166,16 @@ func (s *Service) syncDomain(ctx context.Context, d Domain, m family.Member, par
 		if !ok {
 			return queued, fmt.Errorf("event %q missing after insert", ev.DedupeKey)
 		}
-		body, err := d.Message(m.Name, ev.Kind, ev.Data)
+		data, err := d.Data(m.Name, ev.Kind, ev.Data)
 		if err != nil {
 			return queued, err
 		}
 		targets := routing.Route(routing.Input{Category: d.Category, Child: m, Overrides: recipients, Parents: parents, Muted: muted})
 		for _, t := range targets {
+			body, err := s.Templates.Render(ctx, d.Name, t.Member.Language, t.Audience, data)
+			if err != nil {
+				return queued, err
+			}
 			if err := notify.Enqueue(ctx, s.Store, s.Loc, eventID, t, body, now); err != nil {
 				return queued, err
 			}

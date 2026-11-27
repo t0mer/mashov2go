@@ -103,14 +103,27 @@ type Renderer struct {
 	Store Store
 }
 
+func otherAudience(a string) string {
+	if a == "child" {
+		return "parent"
+	}
+	return "child"
+}
+
 // Render returns the message text for category, language and audience.
 func (r Renderer) Render(ctx context.Context, category, lang, audience string, data map[string]any) (string, error) {
-	body, ok := Default(category, lang, audience)
-	if !ok {
-		return "", fmt.Errorf("no template for %s/%s/%s", category, lang, audience)
+	aud := audience
+	if _, ok := Default(category, lang, aud); !ok {
+		// Some categories have one audience only (homework is for the child). A
+		// recipient of the other audience gets that template instead of nothing.
+		aud = otherAudience(audience)
+		if _, ok := Default(category, lang, aud); !ok {
+			return "", fmt.Errorf("no template for %s/%s", category, lang)
+		}
 	}
+	body, _ := Default(category, lang, aud)
 	if r.Store != nil {
-		o, found, err := r.Store.GetTemplate(ctx, category, lang, audience)
+		o, found, err := r.Store.GetTemplate(ctx, category, lang, aud)
 		if err != nil {
 			return "", err
 		}

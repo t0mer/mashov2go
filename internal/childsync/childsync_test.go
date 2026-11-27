@@ -13,6 +13,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/mashov"
 	"github.com/t0mer/mashov2go/internal/store"
 	"github.com/t0mer/mashov2go/internal/syncer"
+	"github.com/t0mer/mashov2go/internal/templates"
 )
 
 // fakeSource returns the records set for each child, keyed by child member id.
@@ -75,9 +76,10 @@ func setup(t *testing.T) *env {
 	e := &env{st: st, src: src, kid: kid, parent: par, now: time.Date(2026, 11, 27, 10, 0, 0, 0, loc)}
 	e.svc = &Service{
 		Store: st, Loc: loc, Domains: []Domain{GradesDomain(src), BehaveDomain(src), HomeworkDomain(src)},
-		Syncer: &syncer.Syncer{Store: st, Now: func() time.Time { return e.now }},
-		Now:    func() time.Time { return e.now },
-		Gap:    func() time.Duration { return 0 },
+		Templates: templates.Renderer{Store: st},
+		Syncer:    &syncer.Syncer{Store: st, Now: func() time.Time { return e.now }},
+		Now:       func() time.Time { return e.now },
+		Gap:       func() time.Duration { return 0 },
 	}
 	return e
 }
@@ -272,5 +274,24 @@ func TestNewHomeworkGoesToTheChildNotTheParent(t *testing.T) {
 	}
 	if !strings.Contains(d[0].Body, "pages 40-42") || !strings.Contains(d[0].Body, "27/11") {
 		t.Fatalf("body = %q", d[0].Body)
+	}
+}
+
+func TestStoredTemplateOverrideChangesTheMessage(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	if err := e.st.PutTemplate(ctx, store.Template{Category: "grades", Language: "he", Audience: "parent", Body: "ציון ב-{{.subject}}: {{.value}}!"}, e.now); err != nil {
+		t.Fatal(err)
+	}
+	e.src.grades[e.kid.ID] = []mashov.Grade{{ID: 1, GradingEventID: 9, SubjectName: "Math", Rate: 80}}
+	_, _ = e.svc.RunDue(ctx) // baseline
+	e.now = e.now.Add(time.Hour)
+	e.src.grades[e.kid.ID] = append(e.src.grades[e.kid.ID], mashov.Grade{ID: 2, GradingEventID: 9, SubjectName: "Art", Rate: 77})
+	if _, err := e.svc.RunDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	d := e.pending(t)
+	if len(d) != 1 || d[0].Body != "ציון ב-Art: 77!" {
+		t.Fatalf("body = %+v (want the override rendered)", d)
 	}
 }

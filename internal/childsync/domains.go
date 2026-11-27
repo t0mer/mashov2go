@@ -18,43 +18,6 @@ type Source interface {
 	Homework(ctx context.Context, child family.Member) ([]mashov.HomeworkItem, error)
 }
 
-// HomeworkDomain syncs homework. New homework goes to the child by default (CLAUDE.md §6.2).
-func HomeworkDomain(src Source) Domain {
-	return Domain{
-		Name:     "homework",
-		Category: family.CatHomework,
-		Fetch: func(ctx context.Context, child family.Member, _, _ time.Time) ([]any, error) {
-			items, err := src.Homework(ctx, child)
-			if err != nil {
-				return nil, err
-			}
-			return anySlice(items), nil
-		},
-		Message: homeworkMessage,
-	}
-}
-
-// homeworkMessage renders homework for the child (CLAUDE.md §7 child template).
-func homeworkMessage(child, kind, payload string) (string, error) {
-	var h mashov.HomeworkItem
-	if err := json.Unmarshal([]byte(payload), &h); err != nil {
-		return "", fmt.Errorf("homework payload: %w", err)
-	}
-	head := "📚 שיעורי בית חדשים"
-	if strings.HasSuffix(kind, "updated") {
-		head = "📚 שיעורי בית עודכנו"
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s – %s\n%s", head, h.SubjectName, h.Homework)
-	if h.Remark != "" {
-		fmt.Fprintf(&b, "\n%s", h.Remark)
-	}
-	if t, err := time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(h.LessonDate, "Z")); err == nil {
-		fmt.Fprintf(&b, "\n(ניתן %s)", t.Format("02/01"))
-	}
-	return b.String(), nil
-}
-
 // GradesDomain syncs grades. Grades are a parent category by default.
 func GradesDomain(src Source) Domain {
 	return Domain{
@@ -67,7 +30,7 @@ func GradesDomain(src Source) Domain {
 			}
 			return anySlice(items), nil
 		},
-		Message: gradeMessage,
+		Data: gradeData,
 	}
 }
 
@@ -83,7 +46,23 @@ func BehaveDomain(src Source) Domain {
 			}
 			return anySlice(items), nil
 		},
-		Message: behaveMessage,
+		Data: behaveData,
+	}
+}
+
+// HomeworkDomain syncs homework. New homework goes to the child by default (CLAUDE.md §6.2).
+func HomeworkDomain(src Source) Domain {
+	return Domain{
+		Name:     "homework",
+		Category: family.CatHomework,
+		Fetch: func(ctx context.Context, child family.Member, _, _ time.Time) ([]any, error) {
+			items, err := src.Homework(ctx, child)
+			if err != nil {
+				return nil, err
+			}
+			return anySlice(items), nil
+		},
+		Data: homeworkData,
 	}
 }
 
@@ -95,48 +74,64 @@ func anySlice[T any](xs []T) []any {
 	return out
 }
 
-// gradeMessage renders a grade (CLAUDE.md §7, parent template). Rate is the number
-// when the school uses one; otherwise the textual grade is shown.
-func gradeMessage(child, kind, payload string) (string, error) {
+// shortDate turns Mashov's "2026-11-02T00:00:00" into "02/11" ("" when unreadable).
+func shortDate(s string) string {
+	t, err := time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(s, "Z"))
+	if err != nil {
+		return ""
+	}
+	return t.Format("02/01")
+}
+
+// gradeData is the template data for a grade. Rate is the number when the school
+// uses one; otherwise the textual grade is shown.
+func gradeData(child, kind, payload string) (map[string]any, error) {
 	var g mashov.Grade
 	if err := json.Unmarshal([]byte(payload), &g); err != nil {
-		return "", fmt.Errorf("grade payload: %w", err)
-	}
-	head := "📊 ציון חדש"
-	if strings.HasSuffix(kind, "updated") {
-		head = "📊 ציון עודכן"
+		return nil, fmt.Errorf("grade payload: %w", err)
 	}
 	value := g.RangeGrade
 	if g.Rate > 0 {
 		value = fmt.Sprint(g.Rate.Int())
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s – %s\n%s", head, child, g.SubjectName)
-	if g.GradingEvent != "" {
-		fmt.Fprintf(&b, " · %s", g.GradingEvent)
-	}
-	fmt.Fprintf(&b, "\nציון: %s", value)
-	return b.String(), nil
+	return map[string]any{
+		"child":   child,
+		"subject": g.SubjectName,
+		"event":   g.GradingEvent,
+		"value":   value,
+		"updated": strings.HasSuffix(kind, "updated"),
+	}, nil
 }
 
-// behaveMessage renders a behaviour record with the school's own wording. Codes
-// are not translated here; the name is what the school recorded.
-func behaveMessage(child, kind, payload string) (string, error) {
+// behaveData is the template data for a behaviour record, in the school's own wording.
+func behaveData(child, kind, payload string) (map[string]any, error) {
 	var h mashov.Behave
 	if err := json.Unmarshal([]byte(payload), &h); err != nil {
-		return "", fmt.Errorf("behave payload: %w", err)
+		return nil, fmt.Errorf("behave payload: %w", err)
 	}
-	head := "⚠️ " + h.AchvaName
-	if strings.HasSuffix(kind, "updated") {
-		head = "⚠️ עודכן: " + h.AchvaName
+	return map[string]any{
+		"child":         child,
+		"name":          h.AchvaName,
+		"subject":       h.Subject,
+		"lesson":        h.Lesson.Int(),
+		"date":          shortDate(h.LessonDate),
+		"justification": h.Justification,
+		"updated":       strings.HasSuffix(kind, "updated"),
+	}, nil
+}
+
+// homeworkData is the template data for homework.
+func homeworkData(child, kind, payload string) (map[string]any, error) {
+	var h mashov.HomeworkItem
+	if err := json.Unmarshal([]byte(payload), &h); err != nil {
+		return nil, fmt.Errorf("homework payload: %w", err)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s – %s\n%s · שיעור %d", head, child, h.Subject, h.Lesson.Int())
-	if t, err := time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(h.LessonDate, "Z")); err == nil {
-		fmt.Fprintf(&b, " · %s", t.Format("02/01"))
-	}
-	if h.Justification != "" {
-		fmt.Fprintf(&b, "\n%s", h.Justification)
-	}
-	return b.String(), nil
+	return map[string]any{
+		"child":   child,
+		"subject": h.SubjectName,
+		"text":    h.Homework,
+		"remark":  h.Remark,
+		"date":    shortDate(h.LessonDate),
+		"updated": strings.HasSuffix(kind, "updated"),
+	}, nil
 }
