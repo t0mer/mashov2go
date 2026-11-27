@@ -89,3 +89,28 @@ func TestAPITokenScopeIsRestricted(t *testing.T) {
 		t.Fatal("unknown scope accepted")
 	}
 }
+
+func TestPasswordChangeEndsOtherSessions(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	now := time.Date(2026, 11, 27, 10, 0, 0, 0, time.UTC)
+	_, _ = s.SetAdminPasswordHashIfUnset(ctx, "$2a$old")
+	_ = s.CreateUISession(ctx, "keep", "c1", now.Add(time.Hour), now)
+	_ = s.CreateUISession(ctx, "other", "c2", now.Add(time.Hour), now)
+
+	if err := s.SetAdminPasswordHash(ctx, "$2a$new"); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := s.AdminPasswordHash(ctx); h != "$2a$new" {
+		t.Fatalf("hash = %q", h)
+	}
+	if err := s.DeleteUISessionsExcept(ctx, "keep"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := s.UISession(ctx, "other", now); ok {
+		t.Fatal("other session survived the password change")
+	}
+	if _, ok, _ := s.UISession(ctx, "keep", now); !ok {
+		t.Fatal("current session was ended")
+	}
+}

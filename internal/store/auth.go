@@ -175,3 +175,22 @@ func scanAPIToken(r rowScan) (APIToken, error) {
 	}
 	return t, nil
 }
+
+// SetAdminPasswordHash replaces the admin password hash (password change).
+func (s *Store) SetAdminPasswordHash(ctx context.Context, hash string) error {
+	enc, err := json.Marshal(hash)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		settingAdminHash, string(enc))
+	return err
+}
+
+// DeleteUISessionsExcept ends every browser session except keepHash. An empty
+// keepHash ends all of them.
+func (s *Store) DeleteUISessionsExcept(ctx context.Context, keepHash string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM ui_sessions WHERE token_hash <> ?`, keepHash)
+	return err
+}
