@@ -54,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.createToken)))
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
 	s.accountRoutes(mux)
+	s.connectorRoutes(mux)
 	s.familyRoutes(mux, "/api/v1/children", family.RoleChild)
 	s.familyRoutes(mux, "/api/v1/parents", family.RoleParent)
 	return mux
