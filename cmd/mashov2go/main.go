@@ -25,6 +25,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/childsync"
 	"github.com/t0mer/mashov2go/internal/crypto"
+	"github.com/t0mer/mashov2go/internal/fastsync"
 	"github.com/t0mer/mashov2go/internal/mashov"
 	"github.com/t0mer/mashov2go/internal/mashovsource"
 	"github.com/t0mer/mashov2go/internal/metrics"
@@ -416,6 +417,15 @@ func cmdRun(args []string, stderr io.Writer) error {
 		// Each child's domains are fetched at the full-sync interval (CLAUDE.md §5.1).
 		Gap: func() time.Duration { return live.Get().SyncFullInterval },
 	}
+	// The fast loop runs first, so a notification's invalidation is acted on in the same tick.
+	fast := &fastsync.Service{
+		Store:       st,
+		Source:      mashovData,
+		Child:       children,
+		Loc:         jerusalem,
+		Interval:    func() time.Duration { return live.Get().SyncFastInterval },
+		ActiveHours: func() string { return live.Get().ActiveHours },
+	}
 	bind := &telegrambind.Service{Store: st, Bot: telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second})}
 	sched := make(chan struct{})
 	go func() {
@@ -423,6 +433,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 		scheduler.Run(ctx, time.Minute, log,
 			scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
 			scheduler.Job{Name: "telegram_bind", Run: bind.RunOnce},
+			scheduler.Job{Name: "fast_sync", Run: fast.RunDue},
 			scheduler.Job{Name: "child_sync", Run: children.RunDue},
 			scheduler.Job{Name: "outbox", Run: worker.RunOnce},
 			scheduler.Job{Name: "session_purge", Run: func(ctx context.Context) (int, error) {
