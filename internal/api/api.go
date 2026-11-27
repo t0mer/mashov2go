@@ -40,6 +40,8 @@ type Server struct {
 	Now            func() time.Time
 	// Metrics is served at /metrics (nil serves an empty exposition).
 	Metrics *metrics.Registry
+	// ChildData reads timetables and homework from Mashov (nil disables them).
+	ChildData ChildData
 	// PlanJob sends a child's plan on demand (nil disables the send endpoint).
 	PlanJob *planjob.Service
 	// Plans loads a child's school data for plan endpoints (nil disables them).
