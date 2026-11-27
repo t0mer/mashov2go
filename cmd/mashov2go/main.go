@@ -385,6 +385,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 		Source: mashovData,
 		Loc:    jerusalem,
 	}
+	apiSrv.PlanJob = plan
 	worker := &outbox.Worker{
 		Store:    st,
 		Resolver: outbox.StoreResolver{Store: st, HTTP: &http.Client{Timeout: 30 * time.Second}},
