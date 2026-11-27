@@ -26,6 +26,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/crypto"
 	"github.com/t0mer/mashov2go/internal/mashov"
 	"github.com/t0mer/mashov2go/internal/mashovsource"
+	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/outbox"
 	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/schedule"
@@ -365,7 +366,9 @@ func cmdRun(args []string, stderr io.Writer) error {
 	}
 	// One Mashov source serves both the API and the plan job, so they share sessions.
 	mashovData := &mashovsource.Source{Store: st}
-	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, SecureCookies: !*insecureCookies, TrustedProxies: trusted}
+	reg := metrics.NewRegistry()
+	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, Metrics: reg,
+		SecureCookies: !*insecureCookies, TrustedProxies: trusted}
 	httpSrv := &http.Server{
 		Addr:              *listen,
 		Handler:           apiSrv.Handler(),
@@ -381,15 +384,19 @@ func cmdRun(args []string, stderr io.Writer) error {
 	}()
 
 	plan := &planjob.Service{
-		Store:  st,
-		Source: mashovData,
-		Loc:    jerusalem,
+		Store:     st,
+		Source:    mashovData,
+		Loc:       jerusalem,
+		PlansSent: reg.Counter("mashov2go_plans_sent_total", "Daily plans recorded as sent."),
+		Events:    reg.Counter("mashov2go_events_total", "New events by category.", "category"),
 	}
 	apiSrv.PlanJob = plan
 	worker := &outbox.Worker{
 		Store:    st,
 		Resolver: outbox.StoreResolver{Store: st, HTTP: &http.Client{Timeout: 30 * time.Second}},
 		Log:      log,
+		Deliveries: reg.Counter("mashov2go_deliveries_total", "Delivery outcomes by channel and status.",
+			"channel", "status"),
 	}
 	bind := &telegrambind.Service{Store: st, Bot: telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second})}
 	sched := make(chan struct{})
