@@ -252,3 +252,35 @@ func TestTruncateRunes(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestTelegramUsernameFromGetMe(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/getMe") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, `{"ok":true,"result":{"username":"mashov_family_bot"}}`)
+	}))
+	defer srv.Close()
+	tg, err := NewTelegram("123456:abcdefghijklmnopqrstuvwx", srv.URL, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, err := tg.Username(context.Background())
+	if err != nil || name != "mashov_family_bot" {
+		t.Fatalf("username = %q, %v", name, err)
+	}
+}
+
+func TestTelegramUsernameRejectsUnsafeValues(t *testing.T) {
+	for _, bad := range []string{`"a/b?x=1"`, `"1startsWithDigit"`, `"ab"`, `""`} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, `{"ok":true,"result":{"username":`+bad+`}}`)
+		}))
+		tg, _ := NewTelegram("123456:abcdefghijklmnopqrstuvwx", srv.URL, srv.Client())
+		if _, err := tg.Username(context.Background()); err == nil {
+			t.Errorf("username %s accepted", bad)
+		}
+		srv.Close()
+	}
+}

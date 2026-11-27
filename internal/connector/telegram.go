@@ -115,6 +115,31 @@ func (t *Telegram) Health(ctx context.Context) Status {
 	return StatusOK
 }
 
+// Username returns the bot's username without @ (getMe), used to build t.me
+// deep links. The result is checked against Telegram's username rules because it
+// is placed in a URL.
+func (t *Telegram) Username(ctx context.Context) (string, error) {
+	raw, status, err := t.call(ctx, "getMe", nil)
+	if err != nil {
+		return "", transient("telegram getMe: %v", err)
+	}
+	if status != http.StatusOK {
+		return "", transient("telegram getMe: HTTP %d", status)
+	}
+	var resp struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Username string `json:"username"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(raw, &resp) != nil || !resp.OK || !botUsernameRe.MatchString(resp.Result.Username) {
+		return "", transient("telegram getMe: bad response")
+	}
+	return resp.Result.Username, nil
+}
+
+var botUsernameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{4,31}$`)
+
 // Close implements Connector.
 func (t *Telegram) Close() error {
 	t.hc.CloseIdleConnections()
