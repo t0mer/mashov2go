@@ -96,11 +96,12 @@ func (s *Store) LinkChild(ctx context.Context, memberID, accountID int64, childG
 
 // ChildMemberFor returns the child member linked to a Mashov student.
 func (s *Store) ChildMemberFor(ctx context.Context, accountID int64, childGUID string) (family.Member, error) {
-	return scanMember(s.db.QueryRowContext(ctx, `
+	m, err := scanMember(s.db.QueryRowContext(ctx, `
 		SELECT m.id, m.role, m.name, m.language, m.whatsapp_phone, m.telegram_chat_id, m.channel, m.whatsapp_connector_id,
 		       m.fallback_channel, m.quiet_start, m.quiet_end, m.plan_enabled, m.plan_time, m.include_homework_today, m.active, m.created_at
 		FROM members m JOIN member_links l ON l.member_id = m.id
 		WHERE l.account_id = ? AND l.child_guid = ? AND m.deleted_at IS NULL`, accountID, childGUID))
+	return m, notFound(err)
 }
 
 // SetRecipient stores the recipient for one category of a child.
