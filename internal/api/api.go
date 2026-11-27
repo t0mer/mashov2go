@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/t0mer/mashov2go/internal/auth"
+	"github.com/t0mer/mashov2go/internal/family"
 	"github.com/t0mer/mashov2go/internal/store"
 )
 
@@ -49,6 +50,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.listTokens)))
 	mux.Handle("POST /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.createToken)))
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
+	s.familyRoutes(mux, "/api/v1/children", family.RoleChild)
+	s.familyRoutes(mux, "/api/v1/parents", family.RoleParent)
 	return mux
 }
 
