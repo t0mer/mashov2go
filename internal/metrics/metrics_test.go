@@ -60,3 +60,13 @@ func TestWrongLabelCountPanics(t *testing.T) {
 	}()
 	NewRegistry().Counter("y_total", "y", "a", "b").Inc("only-one")
 }
+
+func TestUnlabelledCounterHasNoBraces(t *testing.T) {
+	r := NewRegistry()
+	r.Counter("plain_total", "plain").Inc()
+	var b bytes.Buffer
+	_ = r.Write(&b)
+	if !strings.Contains(b.String(), "\nplain_total 1\n") {
+		t.Fatalf("unlabelled counter:\n%s", b.String())
+	}
+}

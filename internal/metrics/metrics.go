@@ -108,8 +108,9 @@ func (c *Counter) write(w io.Writer) error {
 	if _, err := fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s counter\n", c.name, c.help, c.name); err != nil {
 		return err
 	}
-	if len(keys) == 0 && len(c.labels) == 0 {
-		_, err := fmt.Fprintf(w, "%s 0\n", c.name)
+	if len(c.labels) == 0 {
+		v := vals[""]
+		_, err := fmt.Fprintf(w, "%s %g\n", c.name, v)
 		return err
 	}
 	for _, k := range keys {

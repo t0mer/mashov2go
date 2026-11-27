@@ -15,6 +15,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
@@ -37,6 +38,8 @@ type Server struct {
 	// rate limiting (for example the local Cloudflare Tunnel connector).
 	TrustedProxies []netip.Prefix
 	Now            func() time.Time
+	// Metrics is served at /metrics (nil serves an empty exposition).
+	Metrics *metrics.Registry
 	// PlanJob sends a child's plan on demand (nil disables the send endpoint).
 	PlanJob *planjob.Service
 	// Plans loads a child's school data for plan endpoints (nil disables them).
@@ -54,6 +57,7 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.healthz)
+	mux.Handle("GET /metrics", s.authed("read", http.HandlerFunc(s.metricsHandler)))
 	mux.HandleFunc("GET /api/v1/setup", s.setupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.setup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
