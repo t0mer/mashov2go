@@ -18,6 +18,10 @@ import (
 // MinPasswordLen is the shortest admin password accepted.
 const MinPasswordLen = 12
 
+// Cost is the bcrypt work factor for new hashes. Tests may lower it; production
+// keeps bcrypt.DefaultCost.
+var Cost = bcrypt.DefaultCost
+
 // maxPasswordBytes is bcrypt's input limit; longer passwords would be silently truncated.
 const maxPasswordBytes = 72
 
@@ -29,7 +33,7 @@ func HashPassword(password string) (string, error) {
 	if len(password) < MinPasswordLen || len(password) > maxPasswordBytes {
 		return "", ErrWeakPassword
 	}
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(password), Cost)
 	if err != nil {
 		return "", err
 	}
