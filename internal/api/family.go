@@ -72,6 +72,7 @@ func (s *Server) familyRoutes(mux *http.ServeMux, base, role string) {
 	mux.Handle("GET "+base+"/{id}", s.authed("read", s.getMember(role)))
 	mux.Handle("PATCH "+base+"/{id}", s.authed("admin", s.patchMember(role)))
 	mux.Handle("DELETE "+base+"/{id}", s.authed("admin", s.deleteMember(role)))
+	mux.Handle("POST "+base+"/{id}/telegram-link", s.authed("admin", http.HandlerFunc(s.telegramLink)))
 	if role == family.RoleChild {
 		s.planRoutes(mux, base)
 		mux.Handle("POST "+base+"/{id}/link", s.authed("admin", s.linkChild()))
@@ -97,6 +98,25 @@ func (s *Server) listMembers(role string) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, out)
 	})
+}
+
+// loadAnyMember returns the member named in the path, whatever its role.
+func (s *Server) loadAnyMember(w http.ResponseWriter, r *http.Request) (family.Member, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		problem(w, http.StatusBadRequest, "Bad request", "the id is not valid")
+		return family.Member{}, false
+	}
+	m, err := s.Store.GetMember(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		problem(w, http.StatusNotFound, "Not found", "no such member")
+		return family.Member{}, false
+	}
+	if err != nil {
+		problem(w, http.StatusInternalServerError, "Internal error", "loading the member failed")
+		return family.Member{}, false
+	}
+	return m, true
 }
 
 // loadMember returns the member named in the path when it has the expected role.

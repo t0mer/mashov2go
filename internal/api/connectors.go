@@ -197,6 +197,16 @@ func (s *Server) openConnector(ctx context.Context, c store.Connector) (connecto
 	if err != nil {
 		return nil, err
 	}
+	if c.Type == "telegram" && s.TelegramAPIBase != "" {
+		// Test seam: point the bot at a fake Bot API.
+		var tc struct {
+			BotToken string `json:"bot_token"`
+		}
+		if err := json.Unmarshal(cfg, &tc); err != nil {
+			return nil, err
+		}
+		return connector.NewTelegram(tc.BotToken, s.TelegramAPIBase, nil)
+	}
 	return connector.Build(c.Type, cfg, nil)
 }
 

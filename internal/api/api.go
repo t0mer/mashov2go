@@ -41,6 +41,8 @@ type Server struct {
 	Plans planjob.Source
 	// Settings is the live settings service (nil leaves the settings routes off).
 	Settings *settings.Service
+	// TelegramAPIBase overrides the Telegram Bot API host (tests only).
+	TelegramAPIBase string
 	// MashovBaseURL overrides mashov.DefaultBaseURL; MashovTransport is for tests.
 	MashovBaseURL   string
 	MashovTransport http.RoundTripper
