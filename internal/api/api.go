@@ -71,7 +71,10 @@ func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 // clientIP is the address rate limiting keys on. X-Forwarded-For is read only
-// when the direct peer is a trusted proxy, so clients cannot choose their key.
+// when the direct peer is a trusted proxy. Each proxy appends the address it
+// received from, so the chain is walked from the right and the first address
+// that is not a trusted proxy is the client. Entries to the left of that are
+// client-supplied and ignored.
 func (s *Server) clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -81,17 +84,29 @@ func (s *Server) clientIP(r *http.Request) string {
 	if err != nil {
 		return host
 	}
-	for _, p := range s.TrustedProxies {
-		if p.Contains(peer) {
-			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-				first := strings.TrimSpace(strings.Split(xff, ",")[0])
-				if a, err := netip.ParseAddr(first); err == nil {
-					return a.String()
-				}
-			}
+	if !s.trusted(peer) {
+		return peer.String()
+	}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		a, err := netip.ParseAddr(strings.TrimSpace(parts[i]))
+		if err != nil {
+			break
+		}
+		if !s.trusted(a) {
+			return a.String()
 		}
 	}
 	return peer.String()
+}
+
+func (s *Server) trusted(a netip.Addr) bool {
+	for _, p := range s.TrustedProxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
 }
 
 // problem writes an RFC 7807 problem document.

@@ -268,6 +268,20 @@ func TestClientIPTrustsForwardedHeaderOnlyFromTrustedProxy(t *testing.T) {
 	if got := srv.clientIP(trusted); got != "198.51.100.1" {
 		t.Fatalf("trusted proxy: key %q", got)
 	}
+	// A client behind the proxy cannot pick its own key by sending a leading address.
+	spoof := httptest.NewRequest(http.MethodPost, "/", nil)
+	spoof.RemoteAddr = "127.0.0.1:4000"
+	spoof.Header.Set("X-Forwarded-For", "10.99.99.99, 198.51.100.1")
+	if got := srv.clientIP(spoof); got != "198.51.100.1" {
+		t.Fatalf("spoofed leading address used: key %q", got)
+	}
+	// An untrusted client's header is ignored entirely.
+	direct := httptest.NewRequest(http.MethodPost, "/", nil)
+	direct.RemoteAddr = "203.0.113.7:4000"
+	direct.Header.Set("X-Forwarded-For", "10.99.99.99")
+	if got := srv.clientIP(direct); got != "203.0.113.7" {
+		t.Fatalf("direct client header honoured: key %q", got)
+	}
 }
 
 func itoa(n int64) string {
