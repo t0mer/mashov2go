@@ -35,6 +35,9 @@ type Server struct {
 	// rate limiting (for example the local Cloudflare Tunnel connector).
 	TrustedProxies []netip.Prefix
 	Now            func() time.Time
+	// MashovBaseURL overrides mashov.DefaultBaseURL; MashovTransport is for tests.
+	MashovBaseURL   string
+	MashovTransport http.RoundTripper
 }
 
 // Handler returns the routed API.
@@ -50,6 +53,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.listTokens)))
 	mux.Handle("POST /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.createToken)))
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
+	s.accountRoutes(mux)
 	s.familyRoutes(mux, "/api/v1/children", family.RoleChild)
 	s.familyRoutes(mux, "/api/v1/parents", family.RoleParent)
 	return mux
