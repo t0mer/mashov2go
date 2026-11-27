@@ -173,3 +173,25 @@ export const CATEGORIES = [
 ] as const;
 
 export const RECIPIENTS = ['child', 'parents', 'both', 'off'] as const;
+
+// Message category keys (CLAUDE.md §6.2) and recipient values map to these
+// translation keys; the raw keys are not shown to users.
+export const CATEGORY_KEY: Record<string, 'catDailyPlan' | 'catHomework' | 'catTimetableChange' | 'catGrades' | 'catBehave' | 'catMaakav' | 'catMail' | 'catSchoolNotice' | 'catForms' | 'catSystemAuth'> = {
+  daily_plan: 'catDailyPlan',
+  homework: 'catHomework',
+  timetable_change: 'catTimetableChange',
+  grades: 'catGrades',
+  behave: 'catBehave',
+  maakav: 'catMaakav',
+  mail: 'catMail',
+  school_notice: 'catSchoolNotice',
+  forms: 'catForms',
+  'system.auth': 'catSystemAuth',
+};
+
+export const RECIPIENT_KEY: Record<string, 'recipientChild' | 'recipientParents' | 'recipientBoth' | 'recipientOff'> = {
+  child: 'recipientChild',
+  parents: 'recipientParents',
+  both: 'recipientBoth',
+  off: 'recipientOff',
+};

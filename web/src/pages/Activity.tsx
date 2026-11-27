@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError, CATEGORIES, type DeliveryRow, type EventRow } from '../api';
+import { api, ApiError, CATEGORIES, CATEGORY_KEY, type DeliveryRow, type EventRow } from '../api';
 import { useI18n } from '../i18n';
 import { useFlash, Flash } from './shared';
 
@@ -53,7 +53,7 @@ export function Activity() {
             <option value="">{t('allCategories')}</option>
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {t(CATEGORY_KEY[c])}
               </option>
             ))}
           </select>
@@ -68,14 +68,14 @@ export function Activity() {
           <thead>
             <tr>
               <th>{t('category')}</th>
-              <th>{t('status')}</th>
-              <th>{t('secondsAgo')}</th>
+              <th>{t('kind')}</th>
+              <th>{t('whenDetected')}</th>
             </tr>
           </thead>
           <tbody>
             {events.map((e) => (
               <tr key={e.id}>
-                <td>{e.category}</td>
+                <td>{CATEGORY_KEY[e.category] ? t(CATEGORY_KEY[e.category]) : e.category}</td>
                 <td>{e.kind}</td>
                 <td>{new Date(e.detectedAt).toLocaleString()}</td>
               </tr>

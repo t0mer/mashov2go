@@ -3,7 +3,9 @@ import {
   api,
   ApiError,
   CATEGORIES,
+  CATEGORY_KEY,
   RECIPIENTS,
+  RECIPIENT_KEY,
   type Account,
   type Member,
   type Plan,
@@ -432,12 +434,12 @@ function Recipients({ member, flash }: { member: Member; flash: FlashState }) {
         <tbody>
           {CATEGORIES.map((c) => (
             <tr key={c}>
-              <td>{c}</td>
+              <td>{t(CATEGORY_KEY[c])}</td>
               <td>
                 <select value={values[c]} onChange={(e) => void save(c, e.target.value)}>
                   {RECIPIENTS.map((r) => (
                     <option key={r} value={r}>
-                      {r}
+                      {t(RECIPIENT_KEY[r])}
                     </option>
                   ))}
                 </select>
@@ -545,7 +547,7 @@ function Mutes({ parent, children, flash }: { parent: Member; children: Member[]
               <th />
               {CATEGORIES.map((c) => (
                 <th key={c} className="small">
-                  {c}
+                  {t(CATEGORY_KEY[c])}
                 </th>
               ))}
             </tr>
@@ -558,7 +560,7 @@ function Mutes({ parent, children, flash }: { parent: Member; children: Member[]
                   <td key={c}>
                     <input
                       type="checkbox"
-                      aria-label={`${k.name} ${c}`}
+                      aria-label={`${k.name} ${t(CATEGORY_KEY[c])}`}
                       checked={muted.has(`${k.id}|${c}`)}
                       onChange={() => void toggle(k.id, c)}
                     />

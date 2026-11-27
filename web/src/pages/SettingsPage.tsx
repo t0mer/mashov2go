@@ -48,16 +48,16 @@ function General() {
     <form className="card stack" onSubmit={save}>
       <h2>{t('generalTitle')}</h2>
       <Flash state={flash} />
-      {text('timezone', 'Timezone')}
-      {text('planDefaultTime', 'Default plan time')}
-      {text('activeHours', 'Active hours')}
-      {text('syncFastInterval', 'Fast sync interval')}
-      {text('syncFullInterval', 'Full sync interval')}
-      {text('syncNightInterval', 'Night sync interval')}
-      {text('mashovMinGap', 'Minimum gap between Mashov requests')}
-      {text('eventsRetention', 'Events retention')}
+      {text('timezone', t('setTimezone'))}
+      {text('planDefaultTime', t('setPlanDefaultTime'))}
+      {text('activeHours', t('setActiveHours'))}
+      {text('syncFastInterval', t('setFastSync'))}
+      {text('syncFullInterval', t('setFullSync'))}
+      {text('syncNightInterval', t('setNightSync'))}
+      {text('mashovMinGap', t('setMinGap'))}
+      {text('eventsRetention', t('setRetention'))}
       <label>
-        Mashov profile
+        {t('setProfile')}
         <select value={s.mashovProfile} onChange={(e) => setS({ ...s, mashovProfile: e.target.value })}>
           <option value="android">android</option>
           <option value="web">web</option>
@@ -65,11 +65,11 @@ function General() {
       </label>
       <label className="check">
         <input type="checkbox" checked={s.preserveUnread} onChange={(e) => setS({ ...s, preserveUnread: e.target.checked })} />
-        Keep mail unread
+        {t('setKeepUnread')}
       </label>
       <label className="check">
         <input type="checkbox" checked={s.shabbatMode} onChange={(e) => setS({ ...s, shabbatMode: e.target.checked })} />
-        Shabbat mode
+        {t('setShabbat')}
       </label>
       <div>
         <button type="submit" className="primary">
