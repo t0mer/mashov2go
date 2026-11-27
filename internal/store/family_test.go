@@ -97,3 +97,28 @@ func TestChildLinkRecipientsAndMutes(t *testing.T) {
 		t.Fatal("deleted child still resolves")
 	}
 }
+
+func TestUnlinkAndResetRecipients(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	acc, _ := s.CreateAccount(ctx, Account{Name: "a", Semel: 1, Year: 2027, Username: "u", DeviceUUID: "x"})
+	kid, _ := s.CreateMember(ctx, child("Noa"))
+	if err := s.LinkChild(ctx, kid.ID, acc.ID, "guid-9"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UnlinkChild(ctx, kid.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, _ := s.MemberLink(ctx, kid.ID); ok {
+		t.Fatal("link still present after unlink")
+	}
+	if err := s.SetRecipient(ctx, kid.ID, family.CatGrades, family.ToBoth); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetRecipients(ctx, kid.ID); err != nil {
+		t.Fatal(err)
+	}
+	if recips, _ := s.Recipients(ctx, kid.ID); len(recips) != 0 {
+		t.Fatalf("overrides left after reset: %v", recips)
+	}
+}

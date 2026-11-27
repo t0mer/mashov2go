@@ -210,3 +210,16 @@ func (s *Store) MemberLink(ctx context.Context, memberID int64) (accountID int64
 	}
 	return accountID, childGUID, true, nil
 }
+
+// UnlinkChild removes a child member's Mashov student link. It is a no-op when
+// the member has no link.
+func (s *Store) UnlinkChild(ctx context.Context, memberID int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM member_links WHERE member_id = ?`, memberID)
+	return err
+}
+
+// ResetRecipients drops a child's recipient overrides so the defaults apply again.
+func (s *Store) ResetRecipients(ctx context.Context, childMemberID int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM delivery_prefs WHERE child_member_id = ?`, childMemberID)
+	return err
+}
