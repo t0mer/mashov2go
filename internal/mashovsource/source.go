@@ -45,6 +45,51 @@ type Source struct {
 	lastPassword map[int64]time.Time
 }
 
+// Timetable returns the child's weekly timetable from Mashov.
+func (s *Source) Timetable(ctx context.Context, child family.Member) ([]mashov.Lesson, error) {
+	accountID, c, guid, err := s.forChild(ctx, child)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.Timetable(ctx, guid)
+	return out, s.expired(accountID, err)
+}
+
+// Homework returns the child's homework list from Mashov.
+func (s *Source) Homework(ctx context.Context, child family.Member) ([]mashov.HomeworkItem, error) {
+	accountID, c, guid, err := s.forChild(ctx, child)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.Homework(ctx, guid)
+	return out, s.expired(accountID, err)
+}
+
+// forChild resolves a child's account session and Mashov student id.
+func (s *Source) forChild(ctx context.Context, child family.Member) (int64, *mashov.Client, string, error) {
+	accountID, guid, ok, err := s.Store.MemberLink(ctx, child.ID)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	if !ok {
+		return 0, nil, "", ErrNotLinked
+	}
+	c, err := s.session(ctx, accountID)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	return accountID, c, guid, nil
+}
+
+// expired drops the account's session when Mashov has ended it, so the next
+// call logs in again, and returns err unchanged.
+func (s *Source) expired(accountID int64, err error) error {
+	if errors.Is(err, mashov.ErrSessionExpired) {
+		s.drop(accountID)
+	}
+	return err
+}
+
 // Load fetches everything the plan for day needs. The first name returned is the
 // child member's first word, which matches how the plan greets the child.
 func (s *Source) Load(ctx context.Context, child family.Member, day time.Time) (schedule.Input, string, error) {
