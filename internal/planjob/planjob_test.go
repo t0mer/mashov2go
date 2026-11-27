@@ -109,8 +109,10 @@ func TestPlanQueuedOnceAndLateChangeUpdates(t *testing.T) {
 		t.Fatalf("rerun queued again: n=%d", n)
 	}
 
-	// A lesson is cancelled-and-added after the plan went out: one update.
+	// A lesson is cancelled-and-added after the plan went out: one update, found
+	// once the load gap has passed (the child is not reloaded before then).
 	src.lessons = append(src.lessons, lesson(3, "Art"))
+	svc.Now = func() time.Time { return at(20, 30) }
 	if n, err := svc.RunDue(ctx); err != nil || n != 1 {
 		t.Fatalf("late change: n=%d err=%v", n, err)
 	}
@@ -150,5 +152,26 @@ func TestChildWithoutPhoneGetsSkippedRow(t *testing.T) {
 	}
 	if pendingCount(t, st) != 0 {
 		t.Fatal("unreachable child stayed pending")
+	}
+}
+
+func TestLoadsAreThrottlePerChild(t *testing.T) {
+	src := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")}}
+	svc, _, _ := setup(t, src, "972500000001")
+	ctx := context.Background()
+
+	svc.Now = func() time.Time { return at(19, 30) }
+	if _, err := svc.RunDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Every tick after plan time until the gap passes must not reach Mashov.
+	for _, mins := range []int{45, 55} {
+		svc.Now = func() time.Time { return at(19, mins) }
+		if _, err := svc.RunDue(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if src.calls != 1 {
+		t.Fatalf("loads within the gap = %d, want 1", src.calls)
 	}
 }

@@ -7,6 +7,7 @@ package planjob
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,16 +31,26 @@ type Source interface {
 	Load(ctx context.Context, child family.Member, day time.Time) (schedule.Input, string, error)
 }
 
+// DefaultLoadGap is the minimum time between two Mashov loads for one child.
+// Once a plan is due it stays due all evening, so without this the job would
+// reload the child's data on every tick.
+const DefaultLoadGap = 30 * time.Minute
+
 // Service runs due plans.
 type Service struct {
 	Store  *store.Store
 	Source Source
 	Loc    *time.Location
 	Now    func() time.Time
+	// LoadGap overrides DefaultLoadGap when non-zero.
+	LoadGap time.Duration
+
+	lastLoad map[int64]time.Time
 }
 
 // RunDue checks every active child with plans enabled and processes those that
-// are due. It returns how many children had a plan queued or updated.
+// are due. It returns how many children had a plan queued or updated. A child
+// that fails does not stop the others; their errors are joined in the result.
 func (s *Service) RunDue(ctx context.Context) (int, error) {
 	now := s.now()
 	members, err := s.Store.ListMembers(ctx)
@@ -53,26 +64,47 @@ func (s *Service) RunDue(ctx context.Context) (int, error) {
 		}
 	}
 	done := 0
+	var errs []error
 	for _, m := range members {
 		if m.Role != family.RoleChild || !m.Active {
 			continue
 		}
 		due, err := planner.PlanDue(m, now, s.Loc)
 		if err != nil {
-			return done, fmt.Errorf("child %d: %w", m.ID, err)
+			errs = append(errs, fmt.Errorf("child %d: %w", m.ID, err))
+			continue
 		}
 		if !due {
 			continue
 		}
 		changed, err := s.processChild(ctx, m, parents, now)
 		if err != nil {
-			return done, fmt.Errorf("child %d: %w", m.ID, err)
+			errs = append(errs, fmt.Errorf("child %d: %w", m.ID, err))
+			continue
 		}
 		if changed {
 			done++
 		}
 	}
-	return done, nil
+	return done, errors.Join(errs...)
+}
+
+// throttled reports whether the child was loaded too recently, and records the
+// load time when it was not. The time is recorded before loading, so a failing
+// child also waits out the gap instead of being retried on every tick.
+func (s *Service) throttled(id int64, now time.Time) bool {
+	if s.lastLoad == nil {
+		s.lastLoad = map[int64]time.Time{}
+	}
+	gap := s.LoadGap
+	if gap == 0 {
+		gap = DefaultLoadGap
+	}
+	if last, ok := s.lastLoad[id]; ok && now.Sub(last) < gap {
+		return true
+	}
+	s.lastLoad[id] = now
+	return false
 }
 
 func (s *Service) processChild(ctx context.Context, m family.Member, parents []family.Member, now time.Time) (bool, error) {
@@ -89,6 +121,9 @@ func (s *Service) processChild(ctx context.Context, m family.Member, parents []f
 		return false, nil
 	}
 
+	if s.throttled(m.ID, now) {
+		return false, nil
+	}
 	in, firstName, err := s.Source.Load(ctx, m, day)
 	if err != nil {
 		return false, err
