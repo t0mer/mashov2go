@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
+	"github.com/t0mer/mashov2go/internal/api"
+	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/crypto"
 	"github.com/t0mer/mashov2go/internal/mashov"
 	"github.com/t0mer/mashov2go/internal/mashovsource"
@@ -50,10 +53,13 @@ const usage = `Usage:
   mashov2go mashov login --semel N --year Y --username U [--profile android|web]
   mashov2go mashov get --semel N --year Y --username U <path> [--profile android|web]
   mashov2go mashov plan --semel N --year Y --username U [--child INDEX] [--date YYYY-MM-DD]
-  mashov2go run [--data DIR]
+  mashov2go run [--data DIR] [--listen ADDR]
 
-"run" starts the background jobs (daily plan, outbox) and stops on SIGINT or
-SIGTERM. It needs MASHOV2GO_MASTER_KEY (or _FILE); DIR defaults to MASHOV2GO_DATA_DIR or /data.
+"run" serves the REST API and runs the background jobs until SIGINT or SIGTERM.
+It needs MASHOV2GO_MASTER_KEY (or _FILE). Optional: MASHOV2GO_ADMIN_PASSWORD (sets
+the admin password on first run), MASHOV2GO_TRUSTED_PROXIES (comma-separated
+addresses or CIDRs whose X-Forwarded-For is honoured), MASHOV2GO_LISTEN (default
+:8080), MASHOV2GO_DATA_DIR (default /data).
 
 The password is read from MASHOV2GO_MASHOV_PASSWORD, or prompted on a terminal.
 All output is PII-redacted (CLAUDE.md §0.5).
@@ -305,12 +311,17 @@ func planDay(s string, now time.Time) (time.Time, error) {
 	return t, nil
 }
 
-// cmdRun opens the database and runs the scheduled jobs until interrupted.
-// The HTTP UI and API are not started yet (CLAUDE.md §9–§10, Phase 5).
+// cmdRun opens the database, serves the REST API and runs the scheduled jobs
+// until interrupted.
 func cmdRun(args []string, stderr io.Writer) error {
 	fs := pflag.NewFlagSet("run", pflag.ContinueOnError)
 	dataDir := fs.String("data", defaultDataDir(), "data directory holding mashov2go.db")
+	listen := fs.String("listen", envOr("MASHOV2GO_LISTEN", ":8080"), "address for the REST API and healthz")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	trusted, err := parseProxies(os.Getenv("MASHOV2GO_TRUSTED_PROXIES"))
+	if err != nil {
 		return err
 	}
 	key, err := crypto.OSLoadMasterKey()
@@ -334,6 +345,26 @@ func cmdRun(args []string, stderr io.Writer) error {
 	defer st.Close()
 
 	log := slog.New(slog.NewTextHandler(stderr, nil))
+	if err := bootstrapAdmin(ctx, st, os.Getenv("MASHOV2GO_ADMIN_PASSWORD"), log); err != nil {
+		return err
+	}
+
+	// The API is served over HTTPS through the tunnel, so cookies are Secure.
+	apiSrv := &api.Server{Store: st, SecureCookies: true, TrustedProxies: trusted}
+	httpSrv := &http.Server{
+		Addr:              *listen,
+		Handler:           apiSrv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	serveErr := make(chan error, 1)
+	go func() {
+		log.Info("api listening", "addr", *listen)
+		serveErr <- httpSrv.ListenAndServe()
+	}()
+
 	plan := &planjob.Service{
 		Store:  st,
 		Source: &mashovsource.Source{Store: st},
@@ -345,14 +376,85 @@ func cmdRun(args []string, stderr io.Writer) error {
 		Log:      log,
 	}
 	bind := &telegrambind.Service{Store: st, Bot: telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second})}
+	sched := make(chan struct{})
+	go func() {
+		defer close(sched)
+		scheduler.Run(ctx, time.Minute, log,
+			scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
+			scheduler.Job{Name: "telegram_bind", Run: bind.RunOnce},
+			scheduler.Job{Name: "outbox", Run: worker.RunOnce},
+			scheduler.Job{Name: "session_purge", Run: func(ctx context.Context) (int, error) {
+				return 0, st.PurgeExpiredUISessions(ctx, time.Now())
+			}},
+		)
+	}()
 	log.Info("mashov2go running", "version", version)
-	scheduler.Run(ctx, time.Minute, log,
-		scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
-		scheduler.Job{Name: "telegram_bind", Run: bind.RunOnce},
-		scheduler.Job{Name: "outbox", Run: worker.RunOnce},
-	)
+
+	select {
+	case err := <-serveErr:
+		// The listener failed (for example the port is taken): stop the jobs too.
+		stop()
+		<-sched
+		return fmt.Errorf("api server: %w", err)
+	case <-ctx.Done():
+	}
+	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := httpSrv.Shutdown(shutdown); err != nil {
+		log.Warn("api shutdown", "err", err)
+	}
+	<-sched
 	log.Info("mashov2go stopped")
 	return nil
+}
+
+// bootstrapAdmin sets the admin password from MASHOV2GO_ADMIN_PASSWORD when none
+// exists yet. The value is never logged. Setup through the API still works when
+// the variable is unset.
+func bootstrapAdmin(ctx context.Context, st *store.Store, password string, log *slog.Logger) error {
+	if password == "" {
+		return nil
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("MASHOV2GO_ADMIN_PASSWORD: %w", err)
+	}
+	set, err := st.SetAdminPasswordHashIfUnset(ctx, hash)
+	if err != nil {
+		return err
+	}
+	if set {
+		log.Info("admin password set from MASHOV2GO_ADMIN_PASSWORD")
+	}
+	return nil
+}
+
+// parseProxies reads MASHOV2GO_TRUSTED_PROXIES: comma-separated IPs or CIDRs.
+func parseProxies(v string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, part := range strings.Split(v, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(part); err == nil {
+			out = append(out, p)
+			continue
+		}
+		a, err := netip.ParseAddr(part)
+		if err != nil {
+			return nil, fmt.Errorf("MASHOV2GO_TRUSTED_PROXIES: %q is not an address or prefix", part)
+		}
+		out = append(out, netip.PrefixFrom(a, a.BitLen()))
+	}
+	return out, nil
+}
+
+func envOr(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return def
 }
 
 func defaultDataDir() string {
