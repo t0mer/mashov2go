@@ -199,3 +199,33 @@ func TestReadTokenCannotWriteFamily(t *testing.T) {
 		t.Fatalf("anonymous listing: %d, want 401", rec.Code)
 	}
 }
+
+func TestParentMutesReplaceAndValidate(t *testing.T) {
+	_, h := newServer(t)
+	cookie, csrf := signIn(t, h)
+	par := decodeMap(t, adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/parents",
+		map[string]string{"name": "Tomer", "whatsappPhone": "0501234567"}).Body.String())
+	kid := decodeMap(t, adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/children",
+		map[string]string{"name": "Noa", "whatsappPhone": "0501234568"}).Body.String())
+	path := "/api/v1/parents/" + itoa(int64(par["id"].(float64))) + "/mutes"
+	kidID := int64(kid["id"].(float64))
+
+	body := map[string]any{"mutes": []map[string]any{{"childId": kidID, "category": "behave"}}}
+	if rec := adminCall(h, cookie, csrf, http.MethodPut, path, body); rec.Code != http.StatusOK || !contains(rec.Body.String(), `"category":"behave"`) {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := adminCall(h, cookie, csrf, http.MethodPut, path, map[string]any{"mutes": []map[string]any{{"childId": kidID, "category": "weather"}}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown category: %d", rec.Code)
+	}
+	if rec := adminCall(h, cookie, csrf, http.MethodPut, path, map[string]any{"mutes": []map[string]any{{"childId": 9999, "category": "behave"}}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown child: %d", rec.Code)
+	}
+	parentAsChild := map[string]any{"mutes": []map[string]any{{"childId": int64(par["id"].(float64)), "category": "behave"}}}
+	if rec := adminCall(h, cookie, csrf, http.MethodPut, path, parentAsChild); rec.Code != http.StatusBadRequest {
+		t.Fatalf("parent used as child: %d", rec.Code)
+	}
+	// A failed request leaves the previous mutes in place.
+	if got := call(h, http.MethodGet, path, nil, cookie, nil); !contains(got.Body.String(), `"category":"behave"`) {
+		t.Fatalf("mutes changed by a rejected request: %s", got.Body.String())
+	}
+}

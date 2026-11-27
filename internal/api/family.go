@@ -73,6 +73,9 @@ func (s *Server) familyRoutes(mux *http.ServeMux, base, role string) {
 	mux.Handle("PATCH "+base+"/{id}", s.authed("admin", s.patchMember(role)))
 	mux.Handle("DELETE "+base+"/{id}", s.authed("admin", s.deleteMember(role)))
 	mux.Handle("POST "+base+"/{id}/telegram-link", s.authed("admin", http.HandlerFunc(s.telegramLink)))
+	if role == family.RoleParent {
+		s.muteRoutes(mux, base)
+	}
 	if role == family.RoleChild {
 		s.planRoutes(mux, base)
 		mux.Handle("POST "+base+"/{id}/link", s.authed("admin", s.linkChild()))
