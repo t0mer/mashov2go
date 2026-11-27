@@ -27,13 +27,13 @@ func viewConnector(c store.Connector) connectorView {
 }
 
 func (s *Server) connectorRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /api/v1/connectors", s.authed("read", http.HandlerFunc(s.listConnectors)))
-	mux.Handle("POST /api/v1/connectors", s.authed("admin", http.HandlerFunc(s.createConnector)))
-	mux.Handle("PATCH /api/v1/connectors/{id}", s.authed("admin", http.HandlerFunc(s.updateConnector)))
-	mux.Handle("DELETE /api/v1/connectors/{id}", s.authed("admin", http.HandlerFunc(s.deleteConnector)))
-	mux.Handle("POST /api/v1/connectors/{id}/default", s.authed("admin", http.HandlerFunc(s.setDefaultConnector)))
-	mux.Handle("GET /api/v1/connectors/{id}/health", s.authed("read", http.HandlerFunc(s.connectorHealth)))
-	mux.Handle("POST /api/v1/connectors/{id}/test", s.authed("admin", http.HandlerFunc(s.testConnector)))
+	s.handle(mux, "GET /api/v1/connectors", s.authed("read", http.HandlerFunc(s.listConnectors)))
+	s.handle(mux, "POST /api/v1/connectors", s.authed("admin", http.HandlerFunc(s.createConnector)))
+	s.handle(mux, "PATCH /api/v1/connectors/{id}", s.authed("admin", http.HandlerFunc(s.updateConnector)))
+	s.handle(mux, "DELETE /api/v1/connectors/{id}", s.authed("admin", http.HandlerFunc(s.deleteConnector)))
+	s.handle(mux, "POST /api/v1/connectors/{id}/default", s.authed("admin", http.HandlerFunc(s.setDefaultConnector)))
+	s.handle(mux, "GET /api/v1/connectors/{id}/health", s.authed("read", http.HandlerFunc(s.connectorHealth)))
+	s.handle(mux, "POST /api/v1/connectors/{id}/test", s.authed("admin", http.HandlerFunc(s.testConnector)))
 }
 
 func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {

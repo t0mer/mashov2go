@@ -14,8 +14,8 @@ type muteView struct {
 }
 
 func (s *Server) muteRoutes(mux *http.ServeMux, base string) {
-	mux.Handle("GET "+base+"/{id}/mutes", s.authed("read", s.listMutes()))
-	mux.Handle("PUT "+base+"/{id}/mutes", s.authed("admin", s.replaceMutes()))
+	s.handle(mux, "GET "+base+"/{id}/mutes", s.authed("read", s.listMutes()))
+	s.handle(mux, "PUT "+base+"/{id}/mutes", s.authed("admin", s.replaceMutes()))
 }
 
 func (s *Server) listMutes() http.Handler {

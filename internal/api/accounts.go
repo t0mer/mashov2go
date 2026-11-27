@@ -44,9 +44,9 @@ func viewStudents(children []mashov.Child) []studentView {
 }
 
 func (s *Server) accountRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /api/v1/accounts", s.authed("read", http.HandlerFunc(s.listAccounts)))
-	mux.Handle("POST /api/v1/accounts", s.authed("admin", http.HandlerFunc(s.createAccount)))
-	mux.Handle("GET /api/v1/accounts/{id}/students", s.authed("admin", http.HandlerFunc(s.accountStudents)))
+	s.handle(mux, "GET /api/v1/accounts", s.authed("read", http.HandlerFunc(s.listAccounts)))
+	s.handle(mux, "POST /api/v1/accounts", s.authed("admin", http.HandlerFunc(s.createAccount)))
+	s.handle(mux, "GET /api/v1/accounts/{id}/students", s.authed("admin", http.HandlerFunc(s.accountStudents)))
 }
 
 func (s *Server) listAccounts(w http.ResponseWriter, r *http.Request) {

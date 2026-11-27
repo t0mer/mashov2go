@@ -37,9 +37,9 @@ type homeworkView struct {
 
 // planRoutes registers the read-only plan endpoints for one child (CLAUDE.md §9).
 func (s *Server) planRoutes(mux *http.ServeMux, base string) {
-	mux.Handle("GET "+base+"/{id}/plan", s.authed("read", s.childPlan(false)))
-	mux.Handle("GET "+base+"/{id}/plan/preview", s.authed("read", s.childPlan(true)))
-	mux.Handle("POST "+base+"/{id}/plan/send", s.authed("admin", http.HandlerFunc(s.sendPlanNow)))
+	s.handle(mux, "GET "+base+"/{id}/plan", s.authed("read", s.childPlan(false)))
+	s.handle(mux, "GET "+base+"/{id}/plan/preview", s.authed("read", s.childPlan(true)))
+	s.handle(mux, "POST "+base+"/{id}/plan/send", s.authed("admin", http.HandlerFunc(s.sendPlanNow)))
 }
 
 // sendPlanNow queues the child's plan for the next school day immediately, to the

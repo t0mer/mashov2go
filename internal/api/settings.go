@@ -35,8 +35,8 @@ func viewGeneral(s settings.Settings) generalView {
 }
 
 func (s *Server) settingsRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /api/v1/settings/general", s.authed("read", http.HandlerFunc(s.getGeneral)))
-	mux.Handle("PATCH /api/v1/settings/general", s.authed("admin", http.HandlerFunc(s.patchGeneral)))
+	s.handle(mux, "GET /api/v1/settings/general", s.authed("read", http.HandlerFunc(s.getGeneral)))
+	s.handle(mux, "PATCH /api/v1/settings/general", s.authed("admin", http.HandlerFunc(s.patchGeneral)))
 }
 
 func (s *Server) getGeneral(w http.ResponseWriter, r *http.Request) {

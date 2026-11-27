@@ -36,9 +36,9 @@ var deliveryStatuses = map[string]bool{
 }
 
 func (s *Server) activityRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /api/v1/deliveries", s.authed("read", http.HandlerFunc(s.listDeliveries)))
-	mux.Handle("POST /api/v1/deliveries/{id}/retry", s.authed("admin", http.HandlerFunc(s.retryDelivery)))
-	mux.Handle("GET /api/v1/events", s.authed("read", http.HandlerFunc(s.listEvents)))
+	s.handle(mux, "GET /api/v1/deliveries", s.authed("read", http.HandlerFunc(s.listDeliveries)))
+	s.handle(mux, "POST /api/v1/deliveries/{id}/retry", s.authed("admin", http.HandlerFunc(s.retryDelivery)))
+	s.handle(mux, "GET /api/v1/events", s.authed("read", http.HandlerFunc(s.listEvents)))
 }
 
 // limitParam reads ?limit=, default 100 and at most 500.

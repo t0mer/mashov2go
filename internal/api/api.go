@@ -53,22 +53,37 @@ type Server struct {
 	// MashovBaseURL overrides mashov.DefaultBaseURL; MashovTransport is for tests.
 	MashovBaseURL   string
 	MashovTransport http.RoundTripper
+
+	patterns []string
+}
+
+// handle registers a route and records its pattern, so the spec test can check
+// that the OpenAPI document describes every route.
+func (s *Server) handle(mux *http.ServeMux, pattern string, h http.Handler) {
+	s.patterns = append(s.patterns, pattern)
+	mux.Handle(pattern, h)
+}
+
+// Patterns returns the route patterns registered by Handler.
+func (s *Server) Patterns() []string {
+	return append([]string(nil), s.patterns...)
 }
 
 // Handler returns the routed API.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", s.healthz)
-	mux.Handle("GET /metrics", s.authed("read", http.HandlerFunc(s.metricsHandler)))
-	mux.HandleFunc("GET /api/v1/setup", s.setupStatus)
-	mux.HandleFunc("POST /api/v1/setup", s.setup)
-	mux.HandleFunc("POST /api/v1/auth/login", s.login)
-	mux.Handle("POST /api/v1/auth/logout", s.authed("admin", http.HandlerFunc(s.logout)))
-	mux.Handle("GET /api/v1/auth/me", s.authed("read", http.HandlerFunc(s.me)))
-	mux.Handle("POST /api/v1/settings/admin-password", s.authed("admin", http.HandlerFunc(s.changePassword)))
-	mux.Handle("GET /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.listTokens)))
-	mux.Handle("POST /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.createToken)))
-	mux.Handle("DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
+	s.handle(mux, "GET /healthz", http.HandlerFunc(s.healthz))
+	s.specRoutes(mux)
+	s.handle(mux, "GET /metrics", s.authed("read", http.HandlerFunc(s.metricsHandler)))
+	s.handle(mux, "GET /api/v1/setup", http.HandlerFunc(s.setupStatus))
+	s.handle(mux, "POST /api/v1/setup", http.HandlerFunc(s.setup))
+	s.handle(mux, "POST /api/v1/auth/login", http.HandlerFunc(s.login))
+	s.handle(mux, "POST /api/v1/auth/logout", s.authed("admin", http.HandlerFunc(s.logout)))
+	s.handle(mux, "GET /api/v1/auth/me", s.authed("read", http.HandlerFunc(s.me)))
+	s.handle(mux, "POST /api/v1/settings/admin-password", s.authed("admin", http.HandlerFunc(s.changePassword)))
+	s.handle(mux, "GET /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.listTokens)))
+	s.handle(mux, "POST /api/v1/tokens", s.authed("admin", http.HandlerFunc(s.createToken)))
+	s.handle(mux, "DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
 	s.accountRoutes(mux)
 	s.connectorRoutes(mux)
 	s.activityRoutes(mux)

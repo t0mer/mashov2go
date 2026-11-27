@@ -67,23 +67,23 @@ func viewMember(m family.Member) memberView {
 
 // familyRoutes registers the member routes for one role under base.
 func (s *Server) familyRoutes(mux *http.ServeMux, base, role string) {
-	mux.Handle("GET "+base, s.authed("read", s.listMembers(role)))
-	mux.Handle("POST "+base, s.authed("admin", s.createMember(role)))
-	mux.Handle("GET "+base+"/{id}", s.authed("read", s.getMember(role)))
-	mux.Handle("PATCH "+base+"/{id}", s.authed("admin", s.patchMember(role)))
-	mux.Handle("DELETE "+base+"/{id}", s.authed("admin", s.deleteMember(role)))
-	mux.Handle("POST "+base+"/{id}/telegram-link", s.authed("admin", http.HandlerFunc(s.telegramLink)))
+	s.handle(mux, "GET "+base, s.authed("read", s.listMembers(role)))
+	s.handle(mux, "POST "+base, s.authed("admin", s.createMember(role)))
+	s.handle(mux, "GET "+base+"/{id}", s.authed("read", s.getMember(role)))
+	s.handle(mux, "PATCH "+base+"/{id}", s.authed("admin", s.patchMember(role)))
+	s.handle(mux, "DELETE "+base+"/{id}", s.authed("admin", s.deleteMember(role)))
+	s.handle(mux, "POST "+base+"/{id}/telegram-link", s.authed("admin", http.HandlerFunc(s.telegramLink)))
 	if role == family.RoleParent {
 		s.muteRoutes(mux, base)
 	}
 	if role == family.RoleChild {
 		s.planRoutes(mux, base)
 		s.childDataRoutes(mux, base)
-		mux.Handle("POST "+base+"/{id}/link", s.authed("admin", s.linkChild()))
-		mux.Handle("DELETE "+base+"/{id}/link", s.authed("admin", s.unlinkChild()))
-		mux.Handle("GET "+base+"/{id}/recipients", s.authed("read", s.getRecipients()))
-		mux.Handle("PUT "+base+"/{id}/recipients", s.authed("admin", s.putRecipients()))
-		mux.Handle("POST "+base+"/{id}/recipients/reset", s.authed("admin", s.resetRecipients()))
+		s.handle(mux, "POST "+base+"/{id}/link", s.authed("admin", s.linkChild()))
+		s.handle(mux, "DELETE "+base+"/{id}/link", s.authed("admin", s.unlinkChild()))
+		s.handle(mux, "GET "+base+"/{id}/recipients", s.authed("read", s.getRecipients()))
+		s.handle(mux, "PUT "+base+"/{id}/recipients", s.authed("admin", s.putRecipients()))
+		s.handle(mux, "POST "+base+"/{id}/recipients/reset", s.authed("admin", s.resetRecipients()))
 	}
 }
 

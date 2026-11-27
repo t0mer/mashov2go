@@ -36,8 +36,8 @@ type homeworkItemView struct {
 }
 
 func (s *Server) childDataRoutes(mux *http.ServeMux, base string) {
-	mux.Handle("GET "+base+"/{id}/timetable", s.authed("read", s.childTimetable()))
-	mux.Handle("GET "+base+"/{id}/homework", s.authed("read", s.childHomework()))
+	s.handle(mux, "GET "+base+"/{id}/timetable", s.authed("read", s.childTimetable()))
+	s.handle(mux, "GET "+base+"/{id}/homework", s.authed("read", s.childHomework()))
 }
 
 // childDataError maps a Mashov read failure to a response.
