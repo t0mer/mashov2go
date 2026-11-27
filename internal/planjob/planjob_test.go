@@ -2,6 +2,7 @@ package planjob
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -200,5 +201,43 @@ func TestPrefetchLoadsBeforePlanTimeAndPlanReusesIt(t *testing.T) {
 	}
 	if pendingCount(t, st) != 1 {
 		t.Fatalf("pending = %d, want 1", pendingCount(t, st))
+	}
+}
+
+func TestSendNowQueuesAgainAndLeavesScheduleAlone(t *testing.T) {
+	src := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")}}
+	svc, st, child := setup(t, src, "972500000001")
+	ctx := context.Background()
+
+	svc.Now = func() time.Time { return at(19, 30) }
+	if _, err := svc.RunDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before, _, _ := st.SentPlanFor(ctx, child.ID, "2026-11-27")
+
+	svc.Now = func() time.Time { return at(21, 0) }
+	n, err := svc.SendNow(ctx, child, nil)
+	if err != nil || n != 1 {
+		t.Fatalf("send now: n=%d err=%v", n, err)
+	}
+	if got := pendingCount(t, st); got != 2 {
+		t.Fatalf("pending = %d, want 2 (scheduled plan + manual send)", got)
+	}
+	after, _, _ := st.SentPlanFor(ctx, child.ID, "2026-11-27")
+	if after.Hash != before.Hash || !after.SentAt.Equal(before.SentAt) {
+		t.Fatal("manual send changed the scheduled plan record")
+	}
+}
+
+func TestSendNowRefusesNonSchoolDay(t *testing.T) {
+	src := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")},
+		holidays: []mashov.Holiday{{ID: 1, Name: "Holiday", StartDate: "2026-11-26T00:00:00", EndDate: "2026-11-28T00:00:00"}}}
+	svc, st, child := setup(t, src, "972500000001")
+	svc.Now = func() time.Time { return at(20, 0) }
+	if _, err := svc.SendNow(context.Background(), child, nil); !errors.Is(err, ErrNoSchoolDay) {
+		t.Fatalf("err = %v, want ErrNoSchoolDay", err)
+	}
+	if pendingCount(t, st) != 0 {
+		t.Fatal("a refused send queued something")
 	}
 }

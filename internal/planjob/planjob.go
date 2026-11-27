@@ -242,17 +242,64 @@ func (s *Service) processChild(ctx context.Context, m family.Member, parents []f
 	if err != nil {
 		return false, err
 	}
-
-	recipients, err := s.Store.Recipients(ctx, m.ID)
-	if err != nil {
+	if _, err := s.deliver(ctx, m, parents, eventID, text, p, now); err != nil {
 		return false, err
 	}
+	if err := s.Store.SavePlanSent(ctx, store.SentPlan{MemberID: m.ID, Date: dateStr, Hash: hash, SentAt: now}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ErrNoSchoolDay is returned by SendNow when the target day has no plan to send.
+var ErrNoSchoolDay = errors.New("planjob: no plan for the target day")
+
+// SendNow sends the child's plan for the next school day immediately, whether or
+// not it was already sent, and returns how many deliveries were queued. It is
+// recorded as its own event, so the scheduled plan and its late-change tracking
+// are left unchanged. It reads Mashov directly; it is a user action, not a tick.
+func (s *Service) SendNow(ctx context.Context, m family.Member, parents []family.Member) (int, error) {
+	now := s.now()
+	dateStr := planner.TargetDate(now, s.Loc)
+	day, err := time.ParseInLocation("2006-01-02", dateStr, s.Loc)
+	if err != nil {
+		return 0, err
+	}
+	in, name, err := s.Source.Load(ctx, m, day)
+	if err != nil {
+		return 0, err
+	}
+	s.initMaps()
+	s.cache[m.ID] = fetched{date: dateStr, in: in, name: name, at: now}
+	p := schedule.Build(in)
+	if p.Skip != "" {
+		return 0, ErrNoSchoolDay
+	}
+	text, err := schedule.Render("", schedule.ChildView{FirstName: name, Plan: p})
+	if err != nil {
+		return 0, err
+	}
+	key := fmt.Sprintf("%s|%d|%s|manual|%d", Category, m.ID, dateStr, now.UnixNano())
+	eventID, err := s.recordKey(ctx, key, "plan_manual", dateStr, now)
+	if err != nil {
+		return 0, err
+	}
+	return s.deliver(ctx, m, parents, eventID, text, p, now)
+}
+
+// deliver routes a rendered plan to the family and queues one delivery per target.
+// Parents get the compact summary instead of the full text when the day has lessons.
+func (s *Service) deliver(ctx context.Context, m family.Member, parents []family.Member, eventID int64, text string, p schedule.Plan, now time.Time) (int, error) {
+	recipients, err := s.Store.Recipients(ctx, m.ID)
+	if err != nil {
+		return 0, err
+	}
 	muted := map[int64]bool{}
-	for _, p := range parents {
-		if ok, err := s.Store.IsMuted(ctx, p.ID, m.ID, Category); err != nil {
-			return false, err
+	for _, par := range parents {
+		if ok, err := s.Store.IsMuted(ctx, par.ID, m.ID, Category); err != nil {
+			return 0, err
 		} else if ok {
-			muted[p.ID] = true
+			muted[par.ID] = true
 		}
 	}
 	targets := routing.Route(routing.Input{Category: Category, Child: m, Overrides: recipients, Parents: parents, Muted: muted})
@@ -262,18 +309,19 @@ func (s *Service) processChild(ctx context.Context, m family.Member, parents []f
 			body = fmt.Sprintf("📋 תוכנית המחר של %s: %d שיעורים", m.Name, len(p.Lessons))
 		}
 		if err := s.enqueue(ctx, eventID, t, body, now); err != nil {
-			return false, err
+			return 0, err
 		}
 	}
-	if err := s.Store.SavePlanSent(ctx, store.SentPlan{MemberID: m.ID, Date: dateStr, Hash: hash, SentAt: now}); err != nil {
-		return false, err
-	}
-	return true, nil
+	return len(targets), nil
 }
 
 // recordEvent stores the plan version once. A retry finds the same event.
 func (s *Service) recordEvent(ctx context.Context, m family.Member, dateStr, kind, hash string, now time.Time) (int64, error) {
-	key := fmt.Sprintf("%s|%d|%s|%s", Category, m.ID, dateStr, hash)
+	return s.recordKey(ctx, fmt.Sprintf("%s|%d|%s|%s", Category, m.ID, dateStr, hash), kind, dateStr, now)
+}
+
+// recordKey stores an event under key once and returns its id.
+func (s *Service) recordKey(ctx context.Context, key, kind, dateStr string, now time.Time) (int64, error) {
 	data, _ := json.Marshal(map[string]string{"date": dateStr})
 	if _, err := s.Store.InsertEvent(ctx, store.Event{
 		Category: Category, Kind: kind, OccurredAt: now, DetectedAt: now,
