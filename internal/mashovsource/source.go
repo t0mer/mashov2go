@@ -85,6 +85,17 @@ func (s *Source) Behave(ctx context.Context, child family.Member, start, end tim
 	return out, s.expired(accountID, err)
 }
 
+// Notifications returns the account's latest notification feed from Mashov.
+// The feed is per account (one parent login sees every child on it).
+func (s *Source) Notifications(ctx context.Context, accountID int64) ([]mashov.Notification, error) {
+	c, err := s.session(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.Notifications(ctx)
+	return out, s.expired(accountID, err)
+}
+
 // forChild resolves a child's account session and Mashov student id.
 func (s *Source) forChild(ctx context.Context, child family.Member) (int64, *mashov.Client, string, error) {
 	accountID, guid, ok, err := s.Store.MemberLink(ctx, child.ID)
