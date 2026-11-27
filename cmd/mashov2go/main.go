@@ -30,6 +30,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/schedule"
 	"github.com/t0mer/mashov2go/internal/scheduler"
+	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
 	"github.com/t0mer/mashov2go/internal/telegrambind"
 )
@@ -358,7 +359,11 @@ func cmdRun(args []string, stderr io.Writer) error {
 	if *insecureCookies {
 		log.Warn("session cookies are sent without the Secure flag; use only on a trusted LAN")
 	}
-	apiSrv := &api.Server{Store: st, SecureCookies: !*insecureCookies, TrustedProxies: trusted}
+	live, err := settings.Load(ctx, st)
+	if err != nil {
+		return err
+	}
+	apiSrv := &api.Server{Store: st, Settings: live, SecureCookies: !*insecureCookies, TrustedProxies: trusted}
 	httpSrv := &http.Server{
 		Addr:              *listen,
 		Handler:           apiSrv.Handler(),
