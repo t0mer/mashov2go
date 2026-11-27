@@ -33,8 +33,10 @@ screen is in `assets/screenshots/login-light.png`.
 
 - **Reads Mashov, read-only.** Signs in with a parent login (a device-pass is
   kept when Mashov issues one), lists the children a login can see, and reads
-  each child's weekly timetable, timetable changes, bell times, holidays and
-  homework.
+  each child's weekly timetable, timetable changes, bell times, holidays,
+  homework, grades and behaviour records. A notification feed is polled during
+  active hours, so new homework, grades and behaviour records reach the family
+  between daily plans.
 - **Daily plan.** Each evening (default 19:30, per child) it builds tomorrow's
   plan from the timetable, changes, bells and holidays. Holidays and days with
   no lessons are skipped. A change made after the plan was sent goes out as one
@@ -57,13 +59,14 @@ screen is in `assets/screenshots/login-light.png`.
 
 ### Not built yet
 
-- Telegram bot commands and daily digests.
-- The grades, behaviour, class notes (maakav) and mail domains. Their Mashov
-  response shapes are not yet confirmed from live traffic.
+- Telegram commands other than `/מחר` (or `/tomorrow`), which a child's chat
+  can use to get tomorrow's plan. Daily digests are not built.
+- Class notes (maakav), teacher mail, forms and consents. Their Mashov response
+  shapes are not yet confirmed from live traffic.
+- Behaviour codes are shown with the school's own wording. Translating the
+  codes themselves needs the app's strings.
 - WhatsApp Web (whatsmeow). Only Green-API and OpenWA are implemented.
-- Template editing: messages use the built-in Hebrew and English templates.
-- Continuous change sync. Only the daily plan reads Mashov on a schedule.
-- Live event streaming (SSE) and a QR code for Telegram links.
+- A QR code for Telegram links. The link is shown as text.
 
 ## Requirements
 
@@ -138,8 +141,8 @@ mashov2go mashov get    --semel N --year Y --username U <path>
 ```
 
 `run` serves the REST API and runs the background jobs (the daily plan, the
-Telegram bind poller, the outbox, and the expired-session cleanup) until it is
-stopped.
+notification poll, the child data sync, the Telegram bind poller, the outbox,
+and the expired-session cleanup) until it is stopped.
 
 ## Setting up
 
