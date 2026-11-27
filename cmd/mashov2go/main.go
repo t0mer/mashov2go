@@ -34,6 +34,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
 	"github.com/t0mer/mashov2go/internal/telegrambind"
+	"github.com/t0mer/mashov2go/internal/webui"
 )
 
 // Zone for civil dates. tzdata is embedded so scratch images work without a tz database.
@@ -369,9 +370,16 @@ func cmdRun(args []string, stderr io.Writer) error {
 	reg := metrics.NewRegistry()
 	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, Metrics: reg,
 		SecureCookies: !*insecureCookies, TrustedProxies: trusted}
+	// The API owns /api, /healthz and /metrics; everything else is the admin UI.
+	root := http.NewServeMux()
+	apiHandler := apiSrv.Handler()
+	root.Handle("/api/", apiHandler)
+	root.Handle("/healthz", apiHandler)
+	root.Handle("/metrics", apiHandler)
+	root.Handle("/", webui.Handler())
 	httpSrv := &http.Server{
 		Addr:              *listen,
-		Handler:           apiSrv.Handler(),
+		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
