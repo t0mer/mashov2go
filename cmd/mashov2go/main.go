@@ -27,6 +27,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/schedule"
 	"github.com/t0mer/mashov2go/internal/scheduler"
 	"github.com/t0mer/mashov2go/internal/store"
+	"github.com/t0mer/mashov2go/internal/telegrambind"
 )
 
 // Zone for civil dates. tzdata is embedded so scratch images work without a tz database.
@@ -343,9 +344,11 @@ func cmdRun(args []string, stderr io.Writer) error {
 		Resolver: outbox.StoreResolver{Store: st, HTTP: &http.Client{Timeout: 30 * time.Second}},
 		Log:      log,
 	}
+	bind := &telegrambind.Service{Store: st, Bot: telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second})}
 	log.Info("mashov2go running", "version", version)
 	scheduler.Run(ctx, time.Minute, log,
 		scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
+		scheduler.Job{Name: "telegram_bind", Run: bind.RunOnce},
 		scheduler.Job{Name: "outbox", Run: worker.RunOnce},
 	)
 	log.Info("mashov2go stopped")
