@@ -2064,6 +2064,56 @@
         "x-scope": "read"
       }
     },
+    "/api/v1/events/stream": {
+      "get": {
+        "tags": [
+          "activity"
+        ],
+        "summary": "Live events as Server-Sent Events (text/event-stream); a heartbeat comment every 25 s",
+        "operationId": "getapi_v1_events_stream",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/api/v1/parents": {
       "get": {
         "tags": [
