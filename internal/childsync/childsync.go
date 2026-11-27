@@ -108,6 +108,8 @@ func NotificationDomains(eventType int) []string {
 		return []string{"grades"}
 	case 101: // Behave
 		return []string{"behave"}
+	case 102: // Homework
+		return []string{"homework"}
 	}
 	return nil
 }

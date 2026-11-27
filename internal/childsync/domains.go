@@ -15,6 +15,44 @@ import (
 type Source interface {
 	Grades(ctx context.Context, child family.Member, start, end time.Time) ([]mashov.Grade, error)
 	Behave(ctx context.Context, child family.Member, start, end time.Time) ([]mashov.Behave, error)
+	Homework(ctx context.Context, child family.Member) ([]mashov.HomeworkItem, error)
+}
+
+// HomeworkDomain syncs homework. New homework goes to the child by default (CLAUDE.md §6.2).
+func HomeworkDomain(src Source) Domain {
+	return Domain{
+		Name:     "homework",
+		Category: family.CatHomework,
+		Fetch: func(ctx context.Context, child family.Member, _, _ time.Time) ([]any, error) {
+			items, err := src.Homework(ctx, child)
+			if err != nil {
+				return nil, err
+			}
+			return anySlice(items), nil
+		},
+		Message: homeworkMessage,
+	}
+}
+
+// homeworkMessage renders homework for the child (CLAUDE.md §7 child template).
+func homeworkMessage(child, kind, payload string) (string, error) {
+	var h mashov.HomeworkItem
+	if err := json.Unmarshal([]byte(payload), &h); err != nil {
+		return "", fmt.Errorf("homework payload: %w", err)
+	}
+	head := "📚 שיעורי בית חדשים"
+	if strings.HasSuffix(kind, "updated") {
+		head = "📚 שיעורי בית עודכנו"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s – %s\n%s", head, h.SubjectName, h.Homework)
+	if h.Remark != "" {
+		fmt.Fprintf(&b, "\n%s", h.Remark)
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(h.LessonDate, "Z")); err == nil {
+		fmt.Fprintf(&b, "\n(ניתן %s)", t.Format("02/01"))
+	}
+	return b.String(), nil
 }
 
 // GradesDomain syncs grades. Grades are a parent category by default.

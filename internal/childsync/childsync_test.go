@@ -17,9 +17,10 @@ import (
 
 // fakeSource returns the records set for each child, keyed by child member id.
 type fakeSource struct {
-	grades map[int64][]mashov.Grade
-	behave map[int64][]mashov.Behave
-	fail   map[int64]bool
+	grades   map[int64][]mashov.Grade
+	behave   map[int64][]mashov.Behave
+	homework map[int64][]mashov.HomeworkItem
+	fail     map[int64]bool
 }
 
 func (f *fakeSource) Grades(_ context.Context, child family.Member, _, _ time.Time) ([]mashov.Grade, error) {
@@ -27,6 +28,13 @@ func (f *fakeSource) Grades(_ context.Context, child family.Member, _, _ time.Ti
 		return nil, errors.New("mashov unavailable")
 	}
 	return f.grades[child.ID], nil
+}
+
+func (f *fakeSource) Homework(_ context.Context, child family.Member) ([]mashov.HomeworkItem, error) {
+	if f.fail[child.ID] {
+		return nil, errors.New("mashov unavailable")
+	}
+	return f.homework[child.ID], nil
 }
 
 func (f *fakeSource) Behave(_ context.Context, child family.Member, _, _ time.Time) ([]mashov.Behave, error) {
@@ -63,10 +71,10 @@ func setup(t *testing.T) *env {
 	par, _ := st.CreateMember(ctx, family.Member{Role: family.RoleParent, Name: "Parent", Language: "he",
 		Channel: family.ChannelWhatsApp, WhatsAppPhone: "972500000001", QuietStart: "22:30", QuietEnd: "06:30",
 		PlanTime: "19:30", Active: true})
-	src := &fakeSource{grades: map[int64][]mashov.Grade{}, behave: map[int64][]mashov.Behave{}, fail: map[int64]bool{}}
+	src := &fakeSource{grades: map[int64][]mashov.Grade{}, behave: map[int64][]mashov.Behave{}, homework: map[int64][]mashov.HomeworkItem{}, fail: map[int64]bool{}}
 	e := &env{st: st, src: src, kid: kid, parent: par, now: time.Date(2026, 11, 27, 10, 0, 0, 0, loc)}
 	e.svc = &Service{
-		Store: st, Loc: loc, Domains: []Domain{GradesDomain(src), BehaveDomain(src)},
+		Store: st, Loc: loc, Domains: []Domain{GradesDomain(src), BehaveDomain(src), HomeworkDomain(src)},
 		Syncer: &syncer.Syncer{Store: st, Now: func() time.Time { return e.now }},
 		Now:    func() time.Time { return e.now },
 		Gap:    func() time.Duration { return 0 },
@@ -244,7 +252,25 @@ func TestNotificationTypesMapToDomains(t *testing.T) {
 	if got := NotificationDomains(101); len(got) != 1 || got[0] != "behave" {
 		t.Fatalf("101 -> %v", got)
 	}
-	if NotificationDomains(102) != nil {
-		t.Fatal("homework notifications should not refresh a domain yet")
+	if got := NotificationDomains(102); len(got) != 1 || got[0] != "homework" {
+		t.Fatalf("102 -> %v", got)
+	}
+}
+
+func TestNewHomeworkGoesToTheChildNotTheParent(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	_, _ = e.svc.RunDue(ctx) // baseline: the existing homework is not announced
+	e.now = e.now.Add(time.Hour)
+	e.src.homework[e.kid.ID] = []mashov.HomeworkItem{{LessonID: 5, SubjectName: "Math", Homework: "pages 40-42", LessonDate: "2026-11-27T00:00:00"}}
+	if n, err := e.svc.RunDue(ctx); err != nil || n != 1 {
+		t.Fatalf("homework: n=%d err=%v", n, err)
+	}
+	d := e.pending(t)
+	if len(d) != 1 || d[0].MemberID != e.kid.ID {
+		t.Fatalf("deliveries = %+v (want one, to the child)", d)
+	}
+	if !strings.Contains(d[0].Body, "pages 40-42") || !strings.Contains(d[0].Body, "27/11") {
+		t.Fatalf("body = %q", d[0].Body)
 	}
 }
