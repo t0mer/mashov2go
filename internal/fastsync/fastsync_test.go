@@ -73,13 +73,14 @@ func TestFirstPollIsBaselineThenNotificationsInvalidate(t *testing.T) {
 
 	e.now = e.now.Add(5 * time.Minute)
 	e.src.items = []mashov.Notification{note(10, 111, "sg-1"), note(11, 101, "sg-1"), note(12, 111, "sg-1"), note(13, 102, "sg-1")}
-	// 10 and 11 were recorded by the baseline. 12 is a grade, 13 is homework (no domain here).
+	// 10 and 11 were recorded by the baseline. 12 is a grade and 13 is homework; both map to a domain.
 	n, err := e.svc.RunDue(ctx)
-	if err != nil || n != 1 {
+	if err != nil || n != 2 {
 		t.Fatalf("new items: n=%d err=%v", n, err)
 	}
-	if len(e.child.calls) != 1 || e.child.calls[0] != (invalidation{e.kid.ID, "grades"}) {
-		t.Fatalf("calls = %v, want one grades invalidation", e.child.calls)
+	want := []invalidation{{e.kid.ID, "grades"}, {e.kid.ID, "homework"}}
+	if len(e.child.calls) != 2 || e.child.calls[0] != want[0] || e.child.calls[1] != want[1] {
+		t.Fatalf("calls = %v, want grades then homework", e.child.calls)
 	}
 	// Already seen ids are not processed again.
 	e.now = e.now.Add(5 * time.Minute)

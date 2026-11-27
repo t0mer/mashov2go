@@ -410,10 +410,14 @@ func cmdRun(args []string, stderr io.Writer) error {
 			"channel", "status"),
 	}
 	children := &childsync.Service{
-		Store:   st,
-		Syncer:  &syncer.Syncer{Store: st},
-		Loc:     jerusalem,
-		Domains: []childsync.Domain{childsync.GradesDomain(mashovData), childsync.BehaveDomain(mashovData)},
+		Store:  st,
+		Syncer: &syncer.Syncer{Store: st},
+		Loc:    jerusalem,
+		Domains: []childsync.Domain{
+			childsync.GradesDomain(mashovData),
+			childsync.BehaveDomain(mashovData),
+			childsync.HomeworkDomain(mashovData),
+		},
 		// Each child's domains are fetched at the full-sync interval (CLAUDE.md §5.1).
 		Gap: func() time.Duration { return live.Get().SyncFullInterval },
 	}
