@@ -403,6 +403,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 		Loc:       jerusalem,
 		PlansSent: reg.Counter("mashov2go_plans_sent_total", "Daily plans recorded as sent."),
 		Events:    reg.Counter("mashov2go_events_total", "New events by category.", "category"),
+		Broker:    broker,
 	}
 	apiSrv.PlanJob = plan
 	worker := &outbox.Worker{
