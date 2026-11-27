@@ -25,6 +25,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/crypto"
 	"github.com/t0mer/mashov2go/internal/mashov"
+	"github.com/t0mer/mashov2go/internal/gradesjob"
 	"github.com/t0mer/mashov2go/internal/mashovsource"
 	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/outbox"
@@ -33,6 +34,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/scheduler"
 	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
+	"github.com/t0mer/mashov2go/internal/syncer"
 	"github.com/t0mer/mashov2go/internal/telegrambind"
 	"github.com/t0mer/mashov2go/internal/webui"
 )
@@ -406,6 +408,14 @@ func cmdRun(args []string, stderr io.Writer) error {
 		Deliveries: reg.Counter("mashov2go_deliveries_total", "Delivery outcomes by channel and status.",
 			"channel", "status"),
 	}
+	grades := &gradesjob.Service{
+		Store:  st,
+		Source: mashovData,
+		Syncer: &syncer.Syncer{Store: st},
+		Loc:    jerusalem,
+		// Each child's grades are fetched at the full-sync interval (CLAUDE.md §5.1).
+		Gap: func() time.Duration { return live.Get().SyncFullInterval },
+	}
 	bind := &telegrambind.Service{Store: st, Bot: telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second})}
 	sched := make(chan struct{})
 	go func() {
@@ -413,6 +423,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 		scheduler.Run(ctx, time.Minute, log,
 			scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
 			scheduler.Job{Name: "telegram_bind", Run: bind.RunOnce},
+		scheduler.Job{Name: "grades", Run: grades.RunDue},
 			scheduler.Job{Name: "outbox", Run: worker.RunOnce},
 			scheduler.Job{Name: "session_purge", Run: func(ctx context.Context) (int, error) {
 				return 0, st.PurgeExpiredUISessions(ctx, time.Now())
