@@ -195,3 +195,11 @@ export const RECIPIENT_KEY: Record<string, 'recipientChild' | 'recipientParents'
   both: 'recipientBoth',
   off: 'recipientOff',
 };
+
+export interface TemplateRow {
+  category: string;
+  language: 'he' | 'en';
+  audience: 'child' | 'parent';
+  body: string;
+  isDefault: boolean;
+}

@@ -68,7 +68,7 @@ func Parse(body string) (*template.Template, error) {
 	}
 	t, err := template.New("m").Option("missingkey=error").Funcs(funcs).Parse(body)
 	if err != nil {
-		return nil, fmt.Errorf("template: %w", err)
+		return nil, fmt.Errorf("syntax error: %s", strings.TrimPrefix(err.Error(), "template: "))
 	}
 	return t, nil
 }

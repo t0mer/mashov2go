@@ -149,6 +149,10 @@ const S = {
   setProfile: ['Mashov app profile', 'פרופיל אפליקציית משו"ב'],
   setKeepUnread: ['Keep mail unread', 'שמירת דואר כלא נקרא'],
   setShabbat: ['Shabbat mode', 'מצב שבת'],
+  templatesTitle: ['Message templates', 'תבניות הודעה'],
+  audience: ['Audience', 'נמען'],
+  audienceChild: ['Child', 'ילד/ה'],
+  audienceParent: ['Parent', 'הורה'],
   linkThis: ['Link', 'קישור'],
 } as const;
 

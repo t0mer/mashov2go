@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, ApiError, type GeneralSettings, type Token } from '../api';
+import { api, ApiError, CATEGORY_KEY, type GeneralSettings, type TemplateRow, type Token } from '../api';
 import { useI18n } from '../i18n';
 import { Flash, useFlash } from './shared';
 
@@ -8,6 +8,7 @@ export function SettingsPage() {
   return (
     <section className="stack wide">
       <General />
+      <Templates />
       <ChangePassword />
       <Tokens />
     </section>
@@ -212,6 +213,109 @@ function Tokens() {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+// Templates edits the family messages (CLAUDE.md §10). A body is checked on save
+// and previewed with sample data; a reset restores the built-in default.
+function Templates() {
+  const { t } = useI18n();
+  const flash = useFlash();
+  const [list, setList] = useState<TemplateRow[] | null>(null);
+  const [edit, setEdit] = useState<TemplateRow | null>(null);
+  const [preview, setPreview] = useState('');
+
+  async function load() {
+    try {
+      setList(await api<TemplateRow[]>('GET', '/api/v1/templates'));
+    } catch (err) {
+      flash.error(err instanceof ApiError ? err.detail || err.title : t('error'));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!edit) return;
+    try {
+      await api('PUT', '/api/v1/templates', edit);
+      flash.ok(t('saved'));
+      setEdit(null);
+      setPreview('');
+      await load();
+    } catch (err) {
+      flash.error(err instanceof ApiError ? err.detail || err.title : t('error'));
+    }
+  }
+
+  async function showPreview() {
+    if (!edit) return;
+    try {
+      const res = await api<{ text: string }>('POST', '/api/v1/templates/preview', { category: edit.category, body: edit.body });
+      setPreview(res.text);
+    } catch (err) {
+      flash.error(err instanceof ApiError ? err.detail || err.title : t('error'));
+    }
+  }
+
+  async function reset(r: TemplateRow) {
+    try {
+      await api('DELETE', `/api/v1/templates/${r.category}/${r.language}/${r.audience}`);
+      flash.ok(t('saved'));
+      await load();
+    } catch (err) {
+      flash.error(err instanceof ApiError ? err.detail || err.title : t('error'));
+    }
+  }
+
+  return (
+    <div className="card stack">
+      <h2>{t('templatesTitle')}</h2>
+      <Flash state={flash} />
+      {list === null ? (
+        <p className="muted">{t('loading')}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>{t('category')}</th>
+              <th>{t('languageField')}</th>
+              <th>{t('audience')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((r) => (
+              <tr key={`${r.category}|${r.language}|${r.audience}`}>
+                <td>{t(CATEGORY_KEY[r.category] ?? 'catGrades')}</td>
+                <td>{r.language}</td>
+                <td>{r.audience === 'child' ? t('audienceChild') : t('audienceParent')}</td>
+                <td className="row">
+                  <button onClick={() => { setEdit(r); setPreview(''); }}>{t('edit')}</button>
+                  {!r.isDefault && <button onClick={() => reset(r)}>{t('resetDefaults')}</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {edit && (
+        <form className="stack" onSubmit={save}>
+          <textarea dir={edit.language === 'he' ? 'rtl' : 'ltr'} rows={6} value={edit.body}
+            onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
+          <div className="row">
+            <button type="button" onClick={showPreview}>{t('preview')}</button>
+            <button type="submit" className="primary">{t('save')}</button>
+            <button type="button" onClick={() => setEdit(null)}>{t('cancel')}</button>
+          </div>
+          {preview && <pre className="card">{preview}</pre>}
+        </form>
       )}
     </div>
   );
