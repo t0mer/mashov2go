@@ -71,6 +71,11 @@ func KeyFor(domain string, obj map[string]any) (string, error) {
 		h := sha256.Sum256([]byte(str(obj["subjectName"]) + "|" + str(obj["lessonDate"]) + "|" + str(obj["homework"])))
 		return "hash:" + hex.EncodeToString(h[:8]), nil
 	case "grades":
+		// The grade record's own id is unique. The grading event alone is not, since
+		// one event can hold several grades.
+		if id, ok := num(obj["id"]); ok && id != "" {
+			return "grade:" + id, nil
+		}
 		return need(domain, obj, "gradingEventId")
 	case "behave":
 		return joined(domain, obj, "lessonId", "eventCode", "lessonDate")

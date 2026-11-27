@@ -31,6 +31,7 @@ func TestKeyRules(t *testing.T) {
 		domain, raw, want string
 	}{
 		{"homework", `{"lessonId":7,"homework":"x"}`, "lesson:7"},
+		{"grades", `{"id":7,"gradingEventId":99}`, "grade:7"},
 		{"grades", `{"gradingEventId":99}`, "99"},
 		{"behave", `{"lessonId":3,"eventCode":5,"lessonDate":"2026-11-02T00:00:00"}`, "3|5|2026-11-02T00:00:00"},
 		{"maakav", `{"maakavId":12}`, "12"},
@@ -105,5 +106,18 @@ func TestUnchangedItemProducesNoEvent(t *testing.T) {
 	res := Classify(stored(cur), again, false)
 	if len(res.Changes) != 0 {
 		t.Fatalf("reordered JSON produced a change: %+v", res.Changes)
+	}
+}
+
+// Two grades in one grading event are two items, not one.
+func TestGradesKeyedByRecordID(t *testing.T) {
+	cur, err := Normalize("grades", raws(t,
+		`{"id":1,"gradingEventId":50,"rate":80}`,
+		`{"id":2,"gradingEventId":50,"rate":90}`))
+	if err != nil {
+		t.Fatalf("two grades in one event rejected: %v", err)
+	}
+	if len(cur) != 2 || cur[0].Key == cur[1].Key {
+		t.Fatalf("keys = %+v", cur)
 	}
 }
