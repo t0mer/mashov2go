@@ -65,6 +65,16 @@ func (s *Source) Homework(ctx context.Context, child family.Member) ([]mashov.Ho
 	return out, s.expired(accountID, err)
 }
 
+// Grades returns the child's grades between start and end from Mashov.
+func (s *Source) Grades(ctx context.Context, child family.Member, start, end time.Time) ([]mashov.Grade, error) {
+	accountID, c, guid, err := s.forChild(ctx, child)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.Grades(ctx, guid, start, end)
+	return out, s.expired(accountID, err)
+}
+
 // forChild resolves a child's account session and Mashov student id.
 func (s *Source) forChild(ctx context.Context, child family.Member) (int64, *mashov.Client, string, error) {
 	accountID, guid, ok, err := s.Store.MemberLink(ctx, child.ID)
