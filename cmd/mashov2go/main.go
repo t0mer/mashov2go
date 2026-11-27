@@ -6,16 +6,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 	_ "time/tzdata"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
+	"github.com/t0mer/mashov2go/internal/crypto"
 	"github.com/t0mer/mashov2go/internal/mashov"
+	"github.com/t0mer/mashov2go/internal/mashovsource"
+	"github.com/t0mer/mashov2go/internal/outbox"
+	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/schedule"
+	"github.com/t0mer/mashov2go/internal/scheduler"
+	"github.com/t0mer/mashov2go/internal/store"
 )
 
 // Zone for civil dates. tzdata is embedded so scratch images work without a tz database.
@@ -38,6 +49,10 @@ const usage = `Usage:
   mashov2go mashov login --semel N --year Y --username U [--profile android|web]
   mashov2go mashov get --semel N --year Y --username U <path> [--profile android|web]
   mashov2go mashov plan --semel N --year Y --username U [--child INDEX] [--date YYYY-MM-DD]
+  mashov2go run [--data DIR]
+
+"run" starts the background jobs (daily plan, outbox) and stops on SIGINT or
+SIGTERM. It needs MASHOV2GO_MASTER_KEY (or _FILE); DIR defaults to MASHOV2GO_DATA_DIR or /data.
 
 The password is read from MASHOV2GO_MASHOV_PASSWORD, or prompted on a terminal.
 All output is PII-redacted (CLAUDE.md §0.5).
@@ -58,6 +73,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if args[0] == "--version" || args[0] == "version" {
 		fmt.Fprintln(stdout, "mashov2go", version)
 		return nil
+	}
+	if args[0] == "run" {
+		return cmdRun(args[1:], stderr)
 	}
 	if args[0] != "mashov" || len(args) < 2 {
 		fmt.Fprint(stderr, usage)
@@ -284,4 +302,59 @@ func planDay(s string, now time.Time) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("--date must be YYYY-MM-DD: %w", err)
 	}
 	return t, nil
+}
+
+// cmdRun opens the database and runs the scheduled jobs until interrupted.
+// The HTTP UI and API are not started yet (CLAUDE.md §9–§10, Phase 5).
+func cmdRun(args []string, stderr io.Writer) error {
+	fs := pflag.NewFlagSet("run", pflag.ContinueOnError)
+	dataDir := fs.String("data", defaultDataDir(), "data directory holding mashov2go.db")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	key, err := crypto.OSLoadMasterKey()
+	if err != nil {
+		return err
+	}
+	sealer, err := crypto.NewSealer(key)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
+		return fmt.Errorf("creating data dir: %w", err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	st, err := store.Open(ctx, filepath.Join(*dataDir, "mashov2go.db"), sealer)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
+	log := slog.New(slog.NewTextHandler(stderr, nil))
+	plan := &planjob.Service{
+		Store:  st,
+		Source: &mashovsource.Source{Store: st},
+		Loc:    jerusalem,
+	}
+	worker := &outbox.Worker{
+		Store:    st,
+		Resolver: outbox.StoreResolver{Store: st, HTTP: &http.Client{Timeout: 30 * time.Second}},
+		Log:      log,
+	}
+	log.Info("mashov2go running", "version", version)
+	scheduler.Run(ctx, time.Minute, log,
+		scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
+		scheduler.Job{Name: "outbox", Run: worker.RunOnce},
+	)
+	log.Info("mashov2go stopped")
+	return nil
+}
+
+func defaultDataDir() string {
+	if d := os.Getenv("MASHOV2GO_DATA_DIR"); d != "" {
+		return d
+	}
+	return "/data"
 }
