@@ -26,12 +26,20 @@ type fakeBotAPI struct {
 	mu      sync.Mutex
 	batches [][]string // each batch is a list of raw update objects
 	offsets []int64
+	sent    []map[string]any // sendMessage bodies, in order
 }
 
 func (f *fakeBotAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	body, _ := io.ReadAll(r.Body)
+	if strings.HasSuffix(r.URL.Path, "/sendMessage") {
+		var m map[string]any
+		_ = json.Unmarshal(body, &m)
+		f.sent = append(f.sent, m)
+		_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":1}}`)
+		return
+	}
 	var req struct {
 		Offset int64 `json:"offset"`
 	}
@@ -62,6 +70,11 @@ func itoa(n int64) string {
 }
 
 func setup(t *testing.T, api *fakeBotAPI) (*Service, *store.Store, family.Member) {
+	svc, st, kid, _ := setupWithParent(t, api)
+	return svc, st, kid
+}
+
+func setupWithParent(t *testing.T, api *fakeBotAPI) (*Service, *store.Store, family.Member, family.Member) {
 	t.Helper()
 	ctx := context.Background()
 	sealer, err := crypto.NewSealer(make([]byte, 32))
@@ -90,6 +103,16 @@ func setup(t *testing.T, api *fakeBotAPI) (*Service, *store.Store, family.Member
 	if err := st.CreateBindToken(ctx, kid.ID, "0123456789abcdef0123456789abcdef", now.Add(24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
+	par, err := st.CreateMember(ctx, family.Member{Role: family.RoleParent, Name: "Parent", Language: "he",
+		Channel: family.ChannelWhatsApp, WhatsAppPhone: "972500000009", QuietStart: "22:30", QuietEnd: "06:30",
+		PlanTime: "19:30", Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	par.TelegramChatID = 666
+	if err := st.UpdateMember(ctx, par); err != nil {
+		t.Fatal(err)
+	}
 	svc := &Service{
 		Store: st,
 		Bot: func(context.Context) (int64, Updater, error) {
@@ -97,7 +120,7 @@ func setup(t *testing.T, api *fakeBotAPI) (*Service, *store.Store, family.Member
 		},
 		Now: func() time.Time { return now },
 	}
-	return svc, st, kid
+	return svc, st, kid, par
 }
 
 func TestBindsChatFromStartAndIgnoresTheRest(t *testing.T) {
@@ -140,5 +163,42 @@ func TestNoBotIsNotAnError(t *testing.T) {
 	svc := &Service{Bot: func(context.Context) (int64, Updater, error) { return 0, nil, ErrNoBot }}
 	if n, err := svc.RunOnce(context.Background()); err != nil || n != 0 {
 		t.Fatalf("n=%d err=%v, want 0 and nil", n, err)
+	}
+}
+
+func TestChildCommandGetsTomorrowsPlanAndOthersGetNothing(t *testing.T) {
+	api := &fakeBotAPI{batches: [][]string{{
+		update(20, 555, "/start 0123456789abcdef0123456789abcdef"), // binds the child to chat 555
+		update(21, 555, "/מחר@mashov_family_bot"),                  // the child asks, with a bot suffix
+		update(22, 777, "/מחר"),                                    // unknown chat
+		update(23, 666, "/tomorrow"),                               // a parent's chat
+	}}}
+	svc, _, _, _ := setupWithParent(t, api)
+	svc.Tomorrow = func(_ context.Context, child family.Member) (string, string, error) {
+		return "תוכנית: " + child.Name, "", nil
+	}
+	if _, err := svc.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(api.sent) != 1 {
+		t.Fatalf("sent %d messages, want 1 (the child only): %v", len(api.sent), api.sent)
+	}
+	if api.sent[0]["chat_id"] != "555" || !strings.Contains(api.sent[0]["text"].(string), "Noa") {
+		t.Fatalf("reply = %v", api.sent[0])
+	}
+}
+
+func TestCommandSkipAndErrorReplies(t *testing.T) {
+	api := &fakeBotAPI{batches: [][]string{{
+		update(30, 555, "/start 0123456789abcdef0123456789abcdef"),
+		update(31, 555, "/tomorrow"),
+	}}}
+	svc, _, _, _ := setupWithParent(t, api)
+	svc.Tomorrow = func(context.Context, family.Member) (string, string, error) { return "", "holiday", nil }
+	if _, err := svc.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(api.sent) != 1 || !strings.Contains(api.sent[0]["text"].(string), "אין לימודים") {
+		t.Fatalf("skip reply = %v", api.sent)
 	}
 }
