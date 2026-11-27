@@ -16,6 +16,12 @@ func Build(typ string, config []byte, hc *http.Client) (Connector, error) {
 			return nil, fmt.Errorf("green-api config: %w", err)
 		}
 		return NewGreenAPI(cfg, hc)
+	case "openwa":
+		var cfg OpenWAConfig
+		if err := json.Unmarshal(config, &cfg); err != nil {
+			return nil, fmt.Errorf("openwa config: %w", err)
+		}
+		return NewOpenWA(cfg, hc)
 	case "telegram":
 		var cfg struct {
 			BotToken string `json:"bot_token"`
