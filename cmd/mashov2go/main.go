@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -53,13 +54,14 @@ const usage = `Usage:
   mashov2go mashov login --semel N --year Y --username U [--profile android|web]
   mashov2go mashov get --semel N --year Y --username U <path> [--profile android|web]
   mashov2go mashov plan --semel N --year Y --username U [--child INDEX] [--date YYYY-MM-DD]
-  mashov2go run [--data DIR] [--listen ADDR]
+  mashov2go run [--data DIR] [--listen ADDR] [--insecure-cookies]
 
 "run" serves the REST API and runs the background jobs until SIGINT or SIGTERM.
 It needs MASHOV2GO_MASTER_KEY (or _FILE). Optional: MASHOV2GO_ADMIN_PASSWORD (sets
 the admin password on first run), MASHOV2GO_TRUSTED_PROXIES (comma-separated
 addresses or CIDRs whose X-Forwarded-For is honoured), MASHOV2GO_LISTEN (default
-:8080), MASHOV2GO_DATA_DIR (default /data).
+:8080), MASHOV2GO_DATA_DIR (default /data). Use --insecure-cookies (or
+MASHOV2GO_INSECURE_COOKIES=true) only for plain-HTTP access on a trusted LAN.
 
 The password is read from MASHOV2GO_MASHOV_PASSWORD, or prompted on a terminal.
 All output is PII-redacted (CLAUDE.md §0.5).
@@ -317,6 +319,8 @@ func cmdRun(args []string, stderr io.Writer) error {
 	fs := pflag.NewFlagSet("run", pflag.ContinueOnError)
 	dataDir := fs.String("data", defaultDataDir(), "data directory holding mashov2go.db")
 	listen := fs.String("listen", envOr("MASHOV2GO_LISTEN", ":8080"), "address for the REST API and healthz")
+	insecureCookies := fs.Bool("insecure-cookies", envBool("MASHOV2GO_INSECURE_COOKIES"),
+		"send session cookies without the Secure flag, for plain-HTTP LAN access")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -349,8 +353,12 @@ func cmdRun(args []string, stderr io.Writer) error {
 		return err
 	}
 
-	// The API is served over HTTPS through the tunnel, so cookies are Secure.
-	apiSrv := &api.Server{Store: st, SecureCookies: true, TrustedProxies: trusted}
+	// Cookies are Secure by default (HTTPS through the tunnel). Plain-HTTP LAN
+	// access needs --insecure-cookies: browsers drop Secure cookies over http.
+	if *insecureCookies {
+		log.Warn("session cookies are sent without the Secure flag; use only on a trusted LAN")
+	}
+	apiSrv := &api.Server{Store: st, SecureCookies: !*insecureCookies, TrustedProxies: trusted}
 	httpSrv := &http.Server{
 		Addr:              *listen,
 		Handler:           apiSrv.Handler(),
@@ -448,6 +456,12 @@ func parseProxies(v string) ([]netip.Prefix, error) {
 		out = append(out, netip.PrefixFrom(a, a.BitLen()))
 	}
 	return out, nil
+}
+
+// envBool reads a boolean environment variable; unset or invalid is false.
+func envBool(name string) bool {
+	v, err := strconv.ParseBool(os.Getenv(name))
+	return err == nil && v
 }
 
 func envOr(name, def string) string {
