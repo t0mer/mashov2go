@@ -9,6 +9,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/family"
 	"github.com/t0mer/mashov2go/internal/mashov"
+	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/schedule"
 )
 
@@ -90,5 +91,46 @@ func TestPlanErrors(t *testing.T) {
 	}
 	if rec := call(h, http.MethodGet, "/api/v1/children/"+id+"/plan", nil, nil, nil); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous plan: %d, want 401", rec.Code)
+	}
+}
+
+func TestSendPlanNow(t *testing.T) {
+	srv, h := newServer(t)
+	srv.Plans = fakePlanSource{}
+	loc, _ := time.LoadLocation("Asia/Jerusalem")
+	evening := time.Date(2026, 11, 26, 20, 0, 0, 0, loc)
+	srv.PlanJob = &planjob.Service{Store: srv.Store, Source: fakePlanSource{}, Loc: loc, Now: func() time.Time { return evening }}
+	cookie, csrf := signIn(t, h)
+	id := kidID(t, h, cookie, csrf)
+
+	rec := adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/children/"+id+"/plan/send", nil)
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"queued":1`) {
+		t.Fatalf("send now: %d %s", rec.Code, rec.Body.String())
+	}
+	if list := call(h, http.MethodGet, "/api/v1/deliveries", nil, cookie, nil); !strings.Contains(list.Body.String(), `"status":"pending"`) {
+		t.Fatalf("nothing queued: %s", list.Body.String())
+	}
+
+	tok := decodeMap(t, adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/tokens",
+		map[string]string{"name": "dash", "scope": "read"}).Body.String())["token"].(string)
+	if rec := call(h, http.MethodPost, "/api/v1/children/"+id+"/plan/send", nil, nil, map[string]string{"Authorization": "Bearer " + tok}); rec.Code != http.StatusForbidden {
+		t.Fatalf("read token sending: %d, want 403", rec.Code)
+	}
+}
+
+func TestSendPlanNowNeedsSchoolDayAndJob(t *testing.T) {
+	srv, h := newServer(t)
+	cookie, csrf := signIn(t, h)
+	id := kidID(t, h, cookie, csrf)
+	if rec := adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/children/"+id+"/plan/send", nil); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("no job: %d, want 503", rec.Code)
+	}
+
+	srv.Plans = fakePlanSource{holidays: []mashov.Holiday{{ID: 1, Name: "Holiday", StartDate: "2026-11-26T00:00:00", EndDate: "2026-11-28T00:00:00"}}}
+	loc, _ := time.LoadLocation("Asia/Jerusalem")
+	evening := time.Date(2026, 11, 26, 20, 0, 0, 0, loc)
+	srv.PlanJob = &planjob.Service{Store: srv.Store, Source: srv.Plans, Loc: loc, Now: func() time.Time { return evening }}
+	if rec := adminCall(h, cookie, csrf, http.MethodPost, "/api/v1/children/"+id+"/plan/send", nil); rec.Code != http.StatusConflict {
+		t.Fatalf("holiday: %d, want 409", rec.Code)
 	}
 }

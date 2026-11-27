@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/planner"
 	"github.com/t0mer/mashov2go/internal/schedule"
 )
@@ -37,6 +39,48 @@ type homeworkView struct {
 func (s *Server) planRoutes(mux *http.ServeMux, base string) {
 	mux.Handle("GET "+base+"/{id}/plan", s.authed("read", s.childPlan(false)))
 	mux.Handle("GET "+base+"/{id}/plan/preview", s.authed("read", s.childPlan(true)))
+	mux.Handle("POST "+base+"/{id}/plan/send", s.authed("admin", http.HandlerFunc(s.sendPlanNow)))
+}
+
+// sendPlanNow queues the child's plan for the next school day immediately, to the
+// same recipients as the scheduled plan (CLAUDE.md §9, §7).
+func (s *Server) sendPlanNow(w http.ResponseWriter, r *http.Request) {
+	m, ok := s.loadMember(w, r, family.RoleChild)
+	if !ok {
+		return
+	}
+	if s.PlanJob == nil {
+		problem(w, http.StatusServiceUnavailable, "Plans unavailable", "the plan job is not configured")
+		return
+	}
+	parents, err := s.activeParents(r.Context())
+	if err != nil {
+		problem(w, http.StatusInternalServerError, "Internal error", "loading parents failed")
+		return
+	}
+	queued, err := s.PlanJob.SendNow(r.Context(), m, parents)
+	switch {
+	case errors.Is(err, planjob.ErrNoSchoolDay):
+		problem(w, http.StatusConflict, "No plan", "there is no school day to plan")
+	case err != nil:
+		problem(w, http.StatusBadGateway, "Plan not sent", "the child's school data could not be loaded; try again later")
+	default:
+		writeJSON(w, http.StatusAccepted, map[string]int{"queued": queued})
+	}
+}
+
+func (s *Server) activeParents(ctx context.Context) ([]family.Member, error) {
+	all, err := s.Store.ListMembers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []family.Member
+	for _, m := range all {
+		if m.Role == family.RoleParent && m.Active {
+			out = append(out, m)
+		}
+	}
+	return out, nil
 }
 
 // planDate returns the school day to plan: ?date=YYYY-MM-DD, or tomorrow in the

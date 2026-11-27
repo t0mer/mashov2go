@@ -37,6 +37,8 @@ type Server struct {
 	// rate limiting (for example the local Cloudflare Tunnel connector).
 	TrustedProxies []netip.Prefix
 	Now            func() time.Time
+	// PlanJob sends a child's plan on demand (nil disables the send endpoint).
+	PlanJob *planjob.Service
 	// Plans loads a child's school data for plan endpoints (nil disables them).
 	Plans planjob.Source
 	// Settings is the live settings service (nil leaves the settings routes off).
