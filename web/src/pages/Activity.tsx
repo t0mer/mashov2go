@@ -28,8 +28,19 @@ export function Activity() {
 
   useEffect(() => {
     void load();
+    // A new event arrives on the live stream and refreshes the lists at once. The
+    // browser reconnects on its own; the minute refresh covers any gap.
+    const stream = new EventSource('/api/v1/events/stream');
+    stream.onmessage = () => void load();
+    stream.addEventListener('homework', () => void load());
+    stream.addEventListener('grades', () => void load());
+    stream.addEventListener('behave', () => void load());
+    stream.addEventListener('daily_plan', () => void load());
     const timer = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      stream.close();
+      window.clearInterval(timer);
+    };
   }, [load]);
 
   async function retry(id: number) {
