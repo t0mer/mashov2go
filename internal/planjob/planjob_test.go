@@ -175,3 +175,30 @@ func TestLoadsAreThrottlePerChild(t *testing.T) {
 		t.Fatalf("loads within the gap = %d, want 1", src.calls)
 	}
 }
+
+func TestPrefetchLoadsBeforePlanTimeAndPlanReusesIt(t *testing.T) {
+	src := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")}}
+	svc, st, _ := setup(t, src, "972500000001")
+	ctx := context.Background()
+
+	// 19:15 is inside the prefetch window: data is loaded, nothing is queued.
+	svc.Now = func() time.Time { return at(19, 15) }
+	if n, err := svc.RunDue(ctx); err != nil || n != 0 {
+		t.Fatalf("prefetch: n=%d err=%v", n, err)
+	}
+	if src.calls != 1 || pendingCount(t, st) != 0 {
+		t.Fatalf("after prefetch: loads=%d pending=%d", src.calls, pendingCount(t, st))
+	}
+
+	// 19:30 plan time: the plan is built from the prefetched data, no second load.
+	svc.Now = func() time.Time { return at(19, 30) }
+	if n, err := svc.RunDue(ctx); err != nil || n != 1 {
+		t.Fatalf("plan: n=%d err=%v", n, err)
+	}
+	if src.calls != 1 {
+		t.Fatalf("plan reloaded Mashov: loads=%d, want 1", src.calls)
+	}
+	if pendingCount(t, st) != 1 {
+		t.Fatalf("pending = %d, want 1", pendingCount(t, st))
+	}
+}

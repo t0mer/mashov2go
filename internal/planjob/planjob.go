@@ -46,6 +46,16 @@ type Service struct {
 	LoadGap time.Duration
 
 	lastLoad map[int64]time.Time
+	cache    map[int64]fetched
+}
+
+// fetched is the Mashov data for one child and target date, kept from the
+// prefetch (15 min before plan time) until the gap has passed.
+type fetched struct {
+	date string
+	in   schedule.Input
+	name string
+	at   time.Time
 }
 
 // RunDue checks every active child with plans enabled and processes those that
@@ -75,6 +85,16 @@ func (s *Service) RunDue(ctx context.Context) (int, error) {
 			continue
 		}
 		if !due {
+			pre, err := planner.PrefetchDue(m, now, s.Loc)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("child %d: %w", m.ID, err))
+				continue
+			}
+			if pre {
+				if err := s.prefetch(ctx, m, now); err != nil {
+					errs = append(errs, fmt.Errorf("child %d prefetch: %w", m.ID, err))
+				}
+			}
 			continue
 		}
 		changed, err := s.processChild(ctx, m, parents, now)
@@ -89,22 +109,75 @@ func (s *Service) RunDue(ctx context.Context) (int, error) {
 	return done, errors.Join(errs...)
 }
 
+func (s *Service) gap() time.Duration {
+	if s.LoadGap != 0 {
+		return s.LoadGap
+	}
+	return DefaultLoadGap
+}
+
+func (s *Service) initMaps() {
+	if s.lastLoad == nil {
+		s.lastLoad = map[int64]time.Time{}
+		s.cache = map[int64]fetched{}
+	}
+}
+
 // throttled reports whether the child was loaded too recently, and records the
 // load time when it was not. The time is recorded before loading, so a failing
 // child also waits out the gap instead of being retried on every tick.
 func (s *Service) throttled(id int64, now time.Time) bool {
-	if s.lastLoad == nil {
-		s.lastLoad = map[int64]time.Time{}
-	}
-	gap := s.LoadGap
-	if gap == 0 {
-		gap = DefaultLoadGap
-	}
-	if last, ok := s.lastLoad[id]; ok && now.Sub(last) < gap {
+	s.initMaps()
+	if last, ok := s.lastLoad[id]; ok && now.Sub(last) < s.gap() {
 		return true
 	}
 	s.lastLoad[id] = now
 	return false
+}
+
+// fresh returns the cached data for the child and date when it is recent enough.
+func (s *Service) fresh(id int64, dateStr string, now time.Time) (fetched, bool) {
+	s.initMaps()
+	c, ok := s.cache[id]
+	if !ok || c.date != dateStr || now.Sub(c.at) >= s.gap() {
+		return fetched{}, false
+	}
+	return c, true
+}
+
+// load fetches the child's data unless an attempt happened within the gap. It
+// returns false when the load was throttled.
+func (s *Service) load(ctx context.Context, m family.Member, dateStr string, day time.Time, now time.Time) (fetched, bool, error) {
+	if s.throttled(m.ID, now) {
+		return fetched{}, false, nil
+	}
+	in, name, err := s.Source.Load(ctx, m, day)
+	if err != nil {
+		return fetched{}, false, err
+	}
+	c := fetched{date: dateStr, in: in, name: name, at: now}
+	s.cache[m.ID] = c
+	return c, true, nil
+}
+
+// prefetch loads a child's data ahead of plan time (CLAUDE.md §5.1) so the plan
+// is built from data fetched shortly before it is sent.
+func (s *Service) prefetch(ctx context.Context, m family.Member, now time.Time) error {
+	dateStr := planner.TargetDate(now, s.Loc)
+	if prev, ok, err := s.Store.SentPlanFor(ctx, m.ID, dateStr); err != nil {
+		return err
+	} else if ok && prev.Hash == skipMarker {
+		return nil
+	}
+	if _, ok := s.fresh(m.ID, dateStr, now); ok {
+		return nil
+	}
+	day, err := time.ParseInLocation("2006-01-02", dateStr, s.Loc)
+	if err != nil {
+		return err
+	}
+	_, _, err = s.load(ctx, m, dateStr, day, now)
+	return err
 }
 
 func (s *Service) processChild(ctx context.Context, m family.Member, parents []family.Member, now time.Time) (bool, error) {
@@ -121,14 +194,19 @@ func (s *Service) processChild(ctx context.Context, m family.Member, parents []f
 		return false, nil
 	}
 
-	if s.throttled(m.ID, now) {
-		return false, nil
+	c, ok := s.fresh(m.ID, dateStr, now)
+	if !ok {
+		var loaded bool
+		c, loaded, err = s.load(ctx, m, dateStr, day, now)
+		if err != nil {
+			return false, err
+		}
+		if !loaded {
+			return false, nil
+		}
 	}
-	in, firstName, err := s.Source.Load(ctx, m, day)
-	if err != nil {
-		return false, err
-	}
-	p := schedule.Build(in)
+	firstName := c.name
+	p := schedule.Build(c.in)
 	text := ""
 	if p.Skip == "" {
 		if text, err = schedule.Render("", schedule.ChildView{FirstName: firstName, Plan: p}); err != nil {
