@@ -269,3 +269,9 @@ func (s *Store) ReplaceMutes(ctx context.Context, parentID int64, mutes []Mute) 
 	}
 	return tx.Commit()
 }
+
+// MemberByTelegramChat returns the live member bound to a Telegram chat.
+func (s *Store) MemberByTelegramChat(ctx context.Context, chatID int64) (family.Member, error) {
+	m, err := scanMember(s.db.QueryRowContext(ctx, memberSelect+` WHERE telegram_chat_id = ? AND deleted_at IS NULL`, chatID))
+	return m, notFound(err)
+}

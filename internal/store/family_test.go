@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/t0mer/mashov2go/internal/family"
@@ -139,5 +140,21 @@ func TestReplaceMutesSetsExactlyTheList(t *testing.T) {
 	got, _ := s.ListMutes(ctx, par.ID)
 	if len(got) != 1 || got[0].ChildID != kid.ID || got[0].Category != family.CatGrades {
 		t.Fatalf("mutes after replace = %+v", got)
+	}
+}
+
+func TestMemberByTelegramChat(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	kid, _ := s.CreateMember(ctx, child("Noa"))
+	if err := s.UpdateMember(ctx, func() family.Member { k := kid; k.TelegramChatID = 555; return k }()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.MemberByTelegramChat(ctx, 555)
+	if err != nil || got.ID != kid.ID {
+		t.Fatalf("bound chat: %+v %v", got, err)
+	}
+	if _, err := s.MemberByTelegramChat(ctx, 999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unbound chat err = %v", err)
 	}
 }
