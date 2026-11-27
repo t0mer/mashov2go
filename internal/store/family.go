@@ -223,3 +223,48 @@ func (s *Store) ResetRecipients(ctx context.Context, childMemberID int64) error 
 	_, err := s.db.ExecContext(ctx, `DELETE FROM delivery_prefs WHERE child_member_id = ?`, childMemberID)
 	return err
 }
+
+// Mute is one silenced category for a parent on a child.
+type Mute struct {
+	ChildID  int64
+	Category string
+}
+
+// ListMutes returns the mutes a parent has set.
+func (s *Store) ListMutes(ctx context.Context, parentID int64) ([]Mute, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT child_member_id, category FROM parent_mutes WHERE parent_member_id = ? ORDER BY child_member_id, category`, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Mute
+	for rows.Next() {
+		var m Mute
+		if err := rows.Scan(&m.ChildID, &m.Category); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// ReplaceMutes sets the parent's mutes to exactly the given list, in one transaction.
+func (s *Store) ReplaceMutes(ctx context.Context, parentID int64, mutes []Mute) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM parent_mutes WHERE parent_member_id = ?`, parentID); err != nil {
+		return err
+	}
+	for _, m := range mutes {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO parent_mutes(parent_member_id, child_member_id, category) VALUES(?,?,?)`,
+			parentID, m.ChildID, m.Category); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}

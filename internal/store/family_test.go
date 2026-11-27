@@ -122,3 +122,22 @@ func TestUnlinkAndResetRecipients(t *testing.T) {
 		t.Fatalf("overrides left after reset: %v", recips)
 	}
 }
+
+func TestReplaceMutesSetsExactlyTheList(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	par, _ := s.CreateMember(ctx, parent("Tomer"))
+	kid, _ := s.CreateMember(ctx, child("Noa"))
+	kid2, _ := s.CreateMember(ctx, child("Dana"))
+
+	if err := s.ReplaceMutes(ctx, par.ID, []Mute{{kid.ID, family.CatBehave}, {kid2.ID, family.CatMail}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceMutes(ctx, par.ID, []Mute{{kid.ID, family.CatGrades}}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.ListMutes(ctx, par.ID)
+	if len(got) != 1 || got[0].ChildID != kid.ID || got[0].Category != family.CatGrades {
+		t.Fatalf("mutes after replace = %+v", got)
+	}
+}
