@@ -218,3 +218,33 @@ func TestNewBehaveRecordUsesSchoolWordingAndMuteIsPerCategory(t *testing.T) {
 		}
 	}
 }
+
+func TestInvalidateFetchesInsideTheGap(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.svc.Gap = func() time.Duration { return 24 * time.Hour }
+	e.src.grades[e.kid.ID] = []mashov.Grade{{ID: 1, GradingEventID: 9, SubjectName: "Math", Rate: 80}}
+	_, _ = e.svc.RunDue(ctx)
+
+	e.now = e.now.Add(time.Minute)
+	e.src.grades[e.kid.ID] = append(e.src.grades[e.kid.ID], mashov.Grade{ID: 2, GradingEventID: 9, SubjectName: "Art", Rate: 70})
+	if n, _ := e.svc.RunDue(ctx); n != 0 {
+		t.Fatal("fetched again inside the gap without an invalidation")
+	}
+	e.svc.Invalidate(e.kid.ID, "grades")
+	if n, err := e.svc.RunDue(ctx); err != nil || n != 1 {
+		t.Fatalf("after invalidate: n=%d err=%v", n, err)
+	}
+}
+
+func TestNotificationTypesMapToDomains(t *testing.T) {
+	if got := NotificationDomains(111); len(got) != 1 || got[0] != "grades" {
+		t.Fatalf("111 -> %v", got)
+	}
+	if got := NotificationDomains(101); len(got) != 1 || got[0] != "behave" {
+		t.Fatalf("101 -> %v", got)
+	}
+	if NotificationDomains(102) != nil {
+		t.Fatal("homework notifications should not refresh a domain yet")
+	}
+}

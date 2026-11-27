@@ -91,6 +91,27 @@ func (s *Service) RunDue(ctx context.Context) (int, error) {
 	return queued, errors.Join(errs...)
 }
 
+// Invalidate makes the next RunDue fetch the child's domain even inside the gap.
+// The fast notification loop uses it when a notification points at that domain.
+func (s *Service) Invalidate(memberID int64, domain string) {
+	if s.lastRun == nil {
+		return
+	}
+	delete(s.lastRun, fmt.Sprintf("%d|%s", memberID, domain))
+}
+
+// NotificationDomains returns the sync domains a Mashov notification type refreshes
+// (CLAUDE.md §5.2). Types with no domain here return nil.
+func NotificationDomains(eventType int) []string {
+	switch eventType {
+	case 111: // Grade
+		return []string{"grades"}
+	case 101: // Behave
+		return []string{"behave"}
+	}
+	return nil
+}
+
 func (s *Service) syncDomain(ctx context.Context, d Domain, m family.Member, parents []family.Member, now time.Time) (int, error) {
 	accountID, guid, linked, err := s.Store.MemberLink(ctx, m.ID)
 	if err != nil {
