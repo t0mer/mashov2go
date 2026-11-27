@@ -356,3 +356,24 @@ func (s *Service) now() time.Time {
 	}
 	return time.Now()
 }
+
+// TomorrowText renders the child's plan for the next school day, as the child sees
+// it. When there is no plan it returns the skip reason (for example "holiday")
+// and empty text. It reads Mashov directly and is used for on-demand requests.
+func (s *Service) TomorrowText(ctx context.Context, m family.Member) (text string, skip string, err error) {
+	dateStr := planner.TargetDate(s.now(), s.Loc)
+	day, err := time.ParseInLocation("2006-01-02", dateStr, s.Loc)
+	if err != nil {
+		return "", "", err
+	}
+	in, name, err := s.Source.Load(ctx, m, day)
+	if err != nil {
+		return "", "", err
+	}
+	p := schedule.Build(in)
+	if p.Skip != "" {
+		return "", p.Skip, nil
+	}
+	text, err = schedule.Render("", schedule.ChildView{FirstName: name, Plan: p})
+	return text, "", err
+}

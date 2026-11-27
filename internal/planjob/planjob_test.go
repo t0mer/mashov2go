@@ -241,3 +241,22 @@ func TestSendNowRefusesNonSchoolDay(t *testing.T) {
 		t.Fatal("a refused send queued something")
 	}
 }
+
+func TestTomorrowTextForChildAndSkipReason(t *testing.T) {
+	src := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")}}
+	svc, _, child := setup(t, src, "972500000001")
+	svc.Now = func() time.Time { return at(20, 0) }
+	text, skip, err := svc.TomorrowText(context.Background(), child)
+	if err != nil || skip != "" || !strings.Contains(text, "Math") {
+		t.Fatalf("tomorrow: text=%q skip=%q err=%v", text, skip, err)
+	}
+
+	hol := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")},
+		holidays: []mashov.Holiday{{ID: 1, Name: "Holiday", StartDate: "2026-11-26T00:00:00", EndDate: "2026-11-28T00:00:00"}}}
+	svc2, _, child2 := setup(t, hol, "972500000001")
+	svc2.Now = func() time.Time { return at(20, 0) }
+	text, skip, err = svc2.TomorrowText(context.Background(), child2)
+	if err != nil || skip == "" || text != "" {
+		t.Fatalf("holiday: text=%q skip=%q err=%v", text, skip, err)
+	}
+}
