@@ -142,10 +142,16 @@ func TestMutedParentGetsNothingAndFailingChildDoesNotStopOthers(t *testing.T) {
 	if n, err := e.svc.RunDue(ctx); n != 1 || err == nil {
 		t.Fatalf("other child: n=%d err=%v (want 1 and the failing child's error)", n, err)
 	}
+	// The mute is for the first child only: the parent gets the other child's grade
+	// and nothing for the muted child.
+	var toParent []store.Delivery
 	for _, d := range e.pending(t) {
 		if d.MemberID == e.parent.ID {
-			t.Fatal("muted parent received a grade")
+			toParent = append(toParent, d)
 		}
+	}
+	if len(toParent) != 1 || !strings.Contains(toParent[0].Body, "Art") {
+		t.Fatalf("parent deliveries = %+v (want only the other child's Art grade)", toParent)
 	}
 }
 
