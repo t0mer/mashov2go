@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/planner"
 	"github.com/t0mer/mashov2go/internal/routing"
 	"github.com/t0mer/mashov2go/internal/schedule"
@@ -44,6 +45,10 @@ type Service struct {
 	Now    func() time.Time
 	// LoadGap overrides DefaultLoadGap when non-zero.
 	LoadGap time.Duration
+	// PlansSent counts plans recorded as sent; Events counts new events by
+	// category. Both are optional (nil disables counting).
+	PlansSent *metrics.Counter
+	Events    *metrics.Counter
 
 	lastLoad map[int64]time.Time
 	cache    map[int64]fetched
@@ -248,6 +253,7 @@ func (s *Service) processChild(ctx context.Context, m family.Member, parents []f
 	if err := s.Store.SavePlanSent(ctx, store.SentPlan{MemberID: m.ID, Date: dateStr, Hash: hash, SentAt: now}); err != nil {
 		return false, err
 	}
+	s.PlansSent.Inc()
 	return true, nil
 }
 
@@ -323,11 +329,15 @@ func (s *Service) recordEvent(ctx context.Context, m family.Member, dateStr, kin
 // recordKey stores an event under key once and returns its id.
 func (s *Service) recordKey(ctx context.Context, key, kind, dateStr string, now time.Time) (int64, error) {
 	data, _ := json.Marshal(map[string]string{"date": dateStr})
-	if _, err := s.Store.InsertEvent(ctx, store.Event{
+	inserted, err := s.Store.InsertEvent(ctx, store.Event{
 		Category: Category, Kind: kind, OccurredAt: now, DetectedAt: now,
 		Data: string(data), Source: "schedule", DedupeKey: key,
-	}); err != nil {
+	})
+	if err != nil {
 		return 0, err
+	}
+	if inserted {
+		s.Events.Inc(Category)
 	}
 	id, ok, err := s.Store.EventIDByDedupe(ctx, key)
 	if err != nil {
