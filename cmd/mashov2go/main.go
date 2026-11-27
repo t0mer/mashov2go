@@ -363,7 +363,9 @@ func cmdRun(args []string, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	apiSrv := &api.Server{Store: st, Settings: live, SecureCookies: !*insecureCookies, TrustedProxies: trusted}
+	// One Mashov source serves both the API and the plan job, so they share sessions.
+	mashovData := &mashovsource.Source{Store: st}
+	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, SecureCookies: !*insecureCookies, TrustedProxies: trusted}
 	httpSrv := &http.Server{
 		Addr:              *listen,
 		Handler:           apiSrv.Handler(),
@@ -380,7 +382,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 
 	plan := &planjob.Service{
 		Store:  st,
-		Source: &mashovsource.Source{Store: st},
+		Source: mashovData,
 		Loc:    jerusalem,
 	}
 	worker := &outbox.Worker{
