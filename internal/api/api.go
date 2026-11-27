@@ -15,6 +15,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
 )
@@ -36,6 +37,8 @@ type Server struct {
 	// rate limiting (for example the local Cloudflare Tunnel connector).
 	TrustedProxies []netip.Prefix
 	Now            func() time.Time
+	// Plans loads a child's school data for plan endpoints (nil disables them).
+	Plans planjob.Source
 	// Settings is the live settings service (nil leaves the settings routes off).
 	Settings *settings.Service
 	// MashovBaseURL overrides mashov.DefaultBaseURL; MashovTransport is for tests.
