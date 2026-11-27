@@ -430,7 +430,11 @@ func cmdRun(args []string, stderr io.Writer) error {
 		Interval:    func() time.Duration { return live.Get().SyncFastInterval },
 		ActiveHours: func() string { return live.Get().ActiveHours },
 	}
-	bind := &telegrambind.Service{Store: st, Bot: telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second})}
+	bind := &telegrambind.Service{
+		Store:    st,
+		Bot:      telegrambind.StoreBot(st, &http.Client{Timeout: 30 * time.Second}),
+		Tomorrow: plan.TomorrowText, // kids' /מחר command
+	}
 	sched := make(chan struct{})
 	go func() {
 		defer close(sched)
