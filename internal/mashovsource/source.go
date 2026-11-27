@@ -75,6 +75,16 @@ func (s *Source) Grades(ctx context.Context, child family.Member, start, end tim
 	return out, s.expired(accountID, err)
 }
 
+// Behave returns the child's behaviour records between start and end from Mashov.
+func (s *Source) Behave(ctx context.Context, child family.Member, start, end time.Time) ([]mashov.Behave, error) {
+	accountID, c, guid, err := s.forChild(ctx, child)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.Behave(ctx, guid, start, end)
+	return out, s.expired(accountID, err)
+}
+
 // forChild resolves a child's account session and Mashov student id.
 func (s *Source) forChild(ctx context.Context, child family.Member) (int64, *mashov.Client, string, error) {
 	accountID, guid, ok, err := s.Store.MemberLink(ctx, child.ID)
