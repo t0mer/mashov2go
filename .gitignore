@@ -62,3 +62,7 @@ npm-debug.log*
 *.zip
 *.pem
 *.key
+
+# Built UI (embedded by internal/webui): only the placeholder is tracked
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
