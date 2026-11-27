@@ -13,6 +13,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/family"
 	"github.com/t0mer/mashov2go/internal/metrics"
+	"github.com/t0mer/mashov2go/internal/notify"
 	"github.com/t0mer/mashov2go/internal/planner"
 	"github.com/t0mer/mashov2go/internal/routing"
 	"github.com/t0mer/mashov2go/internal/schedule"
@@ -314,7 +315,7 @@ func (s *Service) deliver(ctx context.Context, m family.Member, parents []family
 		if t.Audience == routing.AudienceParent && p.Skip == "" {
 			body = fmt.Sprintf("📋 תוכנית המחר של %s: %d שיעורים", m.Name, len(p.Lessons))
 		}
-		if err := s.enqueue(ctx, eventID, t, body, now); err != nil {
+		if err := notify.Enqueue(ctx, s.Store, s.Loc, eventID, t, body, now); err != nil {
 			return 0, err
 		}
 	}
@@ -347,27 +348,6 @@ func (s *Service) recordKey(ctx context.Context, key, kind, dateStr string, now 
 		return 0, fmt.Errorf("event %q missing after insert", key)
 	}
 	return id, nil
-}
-
-// enqueue queues one target (a duplicate for the same event and member is a no-op). Quiet hours move the send to the end of the hold.
-// A target with no usable channel is recorded as skipped_no_channel.
-func (s *Service) enqueue(ctx context.Context, eventID int64, t routing.Target, body string, now time.Time) error {
-	when := now
-	if t.Member.QuietStart != "" && t.Member.QuietEnd != "" {
-		until, held, err := routing.HoldUntil(now, t.Member.QuietStart, t.Member.QuietEnd, s.Loc)
-		if err != nil {
-			return err
-		}
-		if held {
-			when = until
-		}
-	}
-	d := store.Delivery{EventID: eventID, MemberID: t.Member.ID, Channel: t.Channel, Body: body, NextAt: when}
-	if t.SkipReason != "" {
-		d.Status, d.LastError = "skipped_no_channel", t.SkipReason
-	}
-	_, err := s.Store.EnqueueDelivery(ctx, d)
-	return err
 }
 
 func (s *Service) now() time.Time {
