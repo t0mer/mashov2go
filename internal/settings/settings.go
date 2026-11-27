@@ -14,6 +14,9 @@ import (
 
 const storeKey = "app"
 
+// ErrInvalid marks a change that failed validation. Nothing was saved.
+var ErrInvalid = errors.New("invalid settings")
+
 // Settings is the full typed configuration.
 type Settings struct {
 	Timezone          string        `json:"timezone"`
@@ -88,7 +91,7 @@ func (s *Service) Update(ctx context.Context, change func(*Settings)) (Settings,
 	change(&next)
 	if err := next.Validate(); err != nil {
 		s.mu.Unlock()
-		return Settings{}, err
+		return Settings{}, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	if err := s.store.SetSetting(ctx, storeKey, next); err != nil {
 		s.mu.Unlock()

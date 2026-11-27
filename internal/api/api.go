@@ -15,6 +15,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
 )
 
@@ -35,6 +36,8 @@ type Server struct {
 	// rate limiting (for example the local Cloudflare Tunnel connector).
 	TrustedProxies []netip.Prefix
 	Now            func() time.Time
+	// Settings is the live settings service (nil leaves the settings routes off).
+	Settings *settings.Service
 	// MashovBaseURL overrides mashov.DefaultBaseURL; MashovTransport is for tests.
 	MashovBaseURL   string
 	MashovTransport http.RoundTripper
@@ -55,6 +58,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.authed("admin", http.HandlerFunc(s.revokeToken)))
 	s.accountRoutes(mux)
 	s.connectorRoutes(mux)
+	if s.Settings != nil {
+		s.settingsRoutes(mux)
+	}
 	s.familyRoutes(mux, "/api/v1/children", family.RoleChild)
 	s.familyRoutes(mux, "/api/v1/parents", family.RoleParent)
 	return mux

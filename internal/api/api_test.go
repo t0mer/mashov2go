@@ -13,6 +13,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/crypto"
+	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -31,7 +32,11 @@ func newServer(t *testing.T) (*Server, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	srv := &Server{Store: st, Limiter: &auth.Limiter{Max: 3, Window: time.Hour}}
+	svc, err := settings.Load(t.Context(), st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{Store: st, Settings: svc, Limiter: &auth.Limiter{Max: 3, Window: time.Hour}}
 	return srv, srv.Handler()
 }
 
