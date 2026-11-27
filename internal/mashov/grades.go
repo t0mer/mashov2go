@@ -9,23 +9,23 @@ import (
 // account returns (see the shape notes in memory). Rate is the numeric grade and
 // RangeGrade the textual one; which is set depends on the grading scheme.
 type Grade struct {
-	ID             int    `json:"id"`
-	GradingEventID int    `json:"gradingEventId"`
+	ID             Number `json:"id"`
+	GradingEventID Number `json:"gradingEventId"`
 	GradingEvent   string `json:"gradingEvent"`
 	GradeType      string `json:"gradeType"`
-	GradeTypeID    int    `json:"gradeTypeId"`
-	GradingPeriod  int    `json:"gradingPeriod"`
-	GradeRate      int    `json:"gradeRate"`
-	Rate           int    `json:"rate"`
+	GradeTypeID    Number `json:"gradeTypeId"`
+	GradingPeriod  Number `json:"gradingPeriod"`
+	GradeRate      Number `json:"gradeRate"`
+	Rate           Number `json:"rate"`
 	RangeGrade     string `json:"rangeGrade"`
 	SubjectName    string `json:"subjectName"`
-	GroupID        int    `json:"groupId"`
+	GroupID        Number `json:"groupId"`
 	GroupName      string `json:"groupName"`
 	TeacherName    string `json:"teacherName"`
 	EventDate      string `json:"eventDate"`
 	Timestamp      string `json:"timestamp"`
 	StudentGUID    string `json:"studentGuid"`
-	Year           int    `json:"year"`
+	Year           Number `json:"year"`
 }
 
 // Grades returns the child's grades between start and end (UTC).

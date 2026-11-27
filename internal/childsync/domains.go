@@ -70,7 +70,7 @@ func gradeMessage(child, kind, payload string) (string, error) {
 	}
 	value := g.RangeGrade
 	if g.Rate > 0 {
-		value = fmt.Sprint(g.Rate)
+		value = fmt.Sprint(g.Rate.Int())
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s – %s\n%s", head, child, g.SubjectName)
@@ -93,7 +93,7 @@ func behaveMessage(child, kind, payload string) (string, error) {
 		head = "⚠️ עודכן: " + h.AchvaName
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s – %s\n%s · שיעור %d", head, child, h.Subject, h.Lesson)
+	fmt.Fprintf(&b, "%s – %s\n%s · שיעור %d", head, child, h.Subject, h.Lesson.Int())
 	if t, err := time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(h.LessonDate, "Z")); err == nil {
 		fmt.Fprintf(&b, " · %s", t.Format("02/01"))
 	}

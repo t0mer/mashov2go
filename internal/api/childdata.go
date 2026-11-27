@@ -172,8 +172,8 @@ func (s *Server) childGrades() http.Handler {
 		}
 		out := make([]gradeView, 0, len(items))
 		for _, g := range items {
-			out = append(out, gradeView{ID: g.ID, Subject: g.SubjectName, Event: g.GradingEvent, GradeType: g.GradeType,
-				Rate: g.Rate, RangeGrade: g.RangeGrade, EventDate: g.EventDate, GradingPeriod: g.GradingPeriod})
+			out = append(out, gradeView{ID: g.ID.Int(), Subject: g.SubjectName, Event: g.GradingEvent, GradeType: g.GradeType,
+				Rate: g.Rate.Int(), RangeGrade: g.RangeGrade, EventDate: g.EventDate, GradingPeriod: g.GradingPeriod.Int()})
 		}
 		writeJSON(w, http.StatusOK, out)
 	})
@@ -201,7 +201,7 @@ func (s *Server) childBehave() http.Handler {
 		}
 		out := make([]behaveView, 0, len(items))
 		for _, b := range items {
-			out = append(out, behaveView{LessonID: b.LessonID, Subject: b.Subject, Lesson: b.Lesson,
+			out = append(out, behaveView{LessonID: b.LessonID.Int(), Subject: b.Subject, Lesson: b.Lesson.Int(),
 				LessonDate: b.LessonDate, Name: b.AchvaName, Justification: b.Justification})
 		}
 		writeJSON(w, http.StatusOK, out)

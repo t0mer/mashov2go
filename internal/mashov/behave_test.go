@@ -15,8 +15,8 @@ func TestBehaveDecodesSchoolWording(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		_, _ = io.WriteString(w, `[{"achvaCode":21,"achvaName":"איחור","achvaAval":-1,"eventCode":21,`+
-			`"justification":"","justified":-1,"lesson":3,"lessonDate":"2026-11-02T00:00:00","lessonId":77,`+
+		_, _ = io.WriteString(w, `[{"achvaCode":21.0,"achvaName":"איחור","achvaAval":-1.0,"eventCode":21,`+
+			`"justification":"","justified":-1.0,"lesson":3,"lessonDate":"2026-11-02T00:00:00","lessonId":77,`+
 			`"subject":"Math","studentGuid":"sg-1","timestamp":"2026-11-02T10:00:00"}]`)
 	}))
 	defer srv.Close()

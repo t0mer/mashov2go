@@ -19,7 +19,7 @@ func TestGradesWindowAndDecoding(t *testing.T) {
 		}
 		gotQuery = r.URL.RawQuery
 		_, _ = io.WriteString(w, `[{"id":501,"gradingEventId":77,"gradingEvent":"Quiz","gradeType":"grade",`+
-			`"gradeTypeId":1,"gradingPeriod":1,"gradeRate":0,"rate":92,"rangeGrade":"","subjectName":"Math",`+
+			`"gradeTypeId":1,"gradingPeriod":1,"gradeRate":0,"rate":92.0,"rangeGrade":"","subjectName":"Math",`+
 			`"groupId":10,"groupName":"7-2","teacherName":"T","eventDate":"2026-11-02T00:00:00",`+
 			`"timestamp":"2026-11-03T08:00:00","studentGuid":"sg-1","year":2027}]`)
 	}))
