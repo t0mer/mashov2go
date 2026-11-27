@@ -14,6 +14,7 @@ import (
 
 	"github.com/t0mer/mashov2go/internal/connector"
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/store"
 )
 
@@ -52,6 +53,16 @@ type Worker struct {
 	Now      func() time.Time
 	Batch    int
 	Log      *slog.Logger
+	// Deliveries counts outcomes by channel and status (nil disables counting).
+	Deliveries *metrics.Counter
+}
+
+// mark counts a delivery outcome once its store update has succeeded.
+func (w *Worker) mark(channel, status string, err error) error {
+	if err == nil {
+		w.Deliveries.Inc(channel, status)
+	}
+	return err
 }
 
 // RunOnce processes up to Batch due deliveries and returns how many it handled.
@@ -80,13 +91,13 @@ func (w *Worker) RunOnce(ctx context.Context) (int, error) {
 func (w *Worker) process(ctx context.Context, d store.Delivery) error {
 	m, err := w.Store.GetMember(ctx, d.MemberID)
 	if errors.Is(err, store.ErrNotFound) {
-		return w.Store.MarkDeliveryFailed(ctx, d.ID, d.Attempts, "member removed")
+		return w.mark(d.Channel, "failed", w.Store.MarkDeliveryFailed(ctx, d.ID, d.Attempts, "member removed"))
 	}
 	if err != nil {
 		return err
 	}
 	if !m.Active {
-		return w.Store.MarkDeliverySkipped(ctx, d.ID, "member inactive")
+		return w.mark(d.Channel, "skipped", w.Store.MarkDeliverySkipped(ctx, d.ID, "member inactive"))
 	}
 
 	conn, addr, err := w.Resolver.Resolve(ctx, m, d.Channel)
@@ -95,7 +106,7 @@ func (w *Worker) process(ctx context.Context, d store.Delivery) error {
 		if ok, ferr := w.fallback(ctx, d, m); ferr != nil || ok {
 			return ferr
 		}
-		return w.Store.MarkDeliverySkipped(ctx, d.ID, "no usable channel")
+		return w.mark(d.Channel, "skipped", w.Store.MarkDeliverySkipped(ctx, d.ID, "no usable channel"))
 	}
 	attempts := d.Attempts + 1
 	if err != nil {
@@ -107,7 +118,7 @@ func (w *Worker) process(ctx context.Context, d store.Delivery) error {
 
 	sendErr := conn.SendTo(ctx, addr, connector.Message{Text: d.Body, EventID: strconv.FormatInt(d.EventID, 10)})
 	if sendErr == nil {
-		return w.Store.MarkDeliverySent(ctx, d.ID, attempts)
+		return w.mark(d.Channel, "sent", w.Store.MarkDeliverySent(ctx, d.ID, attempts))
 	}
 	w.log().Warn("delivery failed", "delivery", d.ID, "channel", d.Channel, "attempt", attempts, "error", sendErr.Error())
 	return w.failed(ctx, d, m, attempts, connector.IsPermanent(sendErr), sendErr)
@@ -121,13 +132,13 @@ func (w *Worker) failed(ctx context.Context, d store.Delivery, m family.Member, 
 		if ok, ferr := w.fallback(ctx, d, m); ferr != nil || ok {
 			return ferr
 		}
-		return w.Store.MarkDeliveryFailed(ctx, d.ID, attempts, err.Error())
+		return w.mark(d.Channel, "failed", w.Store.MarkDeliveryFailed(ctx, d.ID, attempts, err.Error()))
 	}
 	wait := Backoff(attempts)
 	if ra := connector.RetryAfterOf(err); ra > wait {
 		wait = ra
 	}
-	return w.Store.MarkDeliveryRetry(ctx, d.ID, attempts, w.now().Add(wait), err.Error())
+	return w.mark(d.Channel, "retry", w.Store.MarkDeliveryRetry(ctx, d.ID, attempts, w.now().Add(wait), err.Error()))
 }
 
 // fallback moves the delivery to the member's fallback channel. It reports false

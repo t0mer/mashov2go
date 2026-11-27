@@ -12,6 +12,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/connector"
 	"github.com/t0mer/mashov2go/internal/crypto"
 	"github.com/t0mer/mashov2go/internal/family"
+	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/store"
 )
 
@@ -85,7 +86,8 @@ func newHarness(t *testing.T, m family.Member, conns map[string]*fakeConn) *harn
 	if err != nil || !ok {
 		t.Fatalf("enqueue: %v %v", ok, err)
 	}
-	h.w = &Worker{Store: st, Resolver: fakeResolver{conns: conns}, Now: func() time.Time { return h.now }}
+	h.w = &Worker{Store: st, Resolver: fakeResolver{conns: conns}, Now: func() time.Time { return h.now },
+		Deliveries: metrics.NewRegistry().Counter("mashov2go_deliveries_total", "Deliveries by channel and status.", "channel", "status")}
 	d, err := st.DueDeliveries(ctx, h.now, 10)
 	if err != nil || len(d) != 1 {
 		t.Fatalf("due: %v %v", d, err)
@@ -125,6 +127,9 @@ func TestSendSucceeds(t *testing.T) {
 	h.runOnce()
 	if d := h.get(); d.Status != "sent" || d.Attempts != 1 || conn.calls != 1 {
 		t.Fatalf("after send: %+v calls=%d", d, conn.calls)
+	}
+	if got := h.w.Deliveries.Value(family.ChannelWhatsApp, "sent"); got != 1 {
+		t.Fatalf("sent counter = %v, want 1", got)
 	}
 }
 
