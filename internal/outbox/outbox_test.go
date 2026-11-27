@@ -2,8 +2,10 @@ package outbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -213,5 +215,42 @@ func TestEnqueueDedupesPerEventAndMember(t *testing.T) {
 	ok, err := h.st.EnqueueDelivery(context.Background(), store.Delivery{EventID: h.member.EventID, MemberID: h.member.MemberID, Channel: "whatsapp", Body: "again"})
 	if err != nil || ok {
 		t.Fatalf("duplicate enqueue: ok=%v err=%v", ok, err)
+	}
+}
+
+// The default WhatsApp connector can be an OpenWA gateway: the resolver builds it
+// from the sealed config and sends the member's phone to it.
+func TestResolverUsesDefaultOpenWAConnector(t *testing.T) {
+	ctx := context.Background()
+	sealer, err := crypto.NewSealer(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "r.db"), sealer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	cfg, _ := json.Marshal(connector.OpenWAConfig{
+		BaseURL: "https://wa.example.com", InstanceID: "sess-1", APIKey: "owa_k1_" + strings.Repeat("b2", 32),
+	})
+	if _, err := st.CreateConnector(ctx, store.Connector{Type: "openwa", Name: "gw", IsDefault: true, Enabled: true}, cfg); err != nil {
+		t.Fatal(err)
+	}
+	kid, err := st.CreateMember(ctx, family.Member{Role: family.RoleChild, Name: "Noa", Language: "he",
+		Channel: family.ChannelWhatsApp, WhatsAppPhone: "972501234567", QuietStart: "21:00", QuietEnd: "07:00",
+		PlanTime: "19:30", Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn, addr, err := StoreResolver{Store: st}.Resolve(ctx, kid, family.ChannelWhatsApp)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	defer conn.Close()
+	if conn.Type() != "openwa" || addr != "972501234567" {
+		t.Fatalf("resolved %s to %q", conn.Type(), addr)
 	}
 }
