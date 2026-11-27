@@ -37,6 +37,7 @@ import (
 	"github.com/t0mer/mashov2go/internal/store"
 	"github.com/t0mer/mashov2go/internal/syncer"
 	"github.com/t0mer/mashov2go/internal/telegrambind"
+	"github.com/t0mer/mashov2go/internal/templates"
 	"github.com/t0mer/mashov2go/internal/webui"
 )
 
@@ -410,9 +411,10 @@ func cmdRun(args []string, stderr io.Writer) error {
 			"channel", "status"),
 	}
 	children := &childsync.Service{
-		Store:  st,
-		Syncer: &syncer.Syncer{Store: st},
-		Loc:    jerusalem,
+		Store:     st,
+		Syncer:    &syncer.Syncer{Store: st},
+		Loc:       jerusalem,
+		Templates: templates.Renderer{Store: st},
 		Domains: []childsync.Domain{
 			childsync.GradesDomain(mashovData),
 			childsync.BehaveDomain(mashovData),
