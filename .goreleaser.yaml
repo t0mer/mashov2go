@@ -1,0 +1,32 @@
+# Release binaries for linux amd64, arm64 and armv7 (CLAUDE.md §12). The UI is built
+# first so it is embedded. Container images are built from the Dockerfile.
+version: 2
+project_name: mashov2go
+
+before:
+  hooks:
+    - sh -c "cd web && npm ci && npm run build"
+
+builds:
+  - id: mashov2go
+    main: ./cmd/mashov2go
+    binary: mashov2go
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64, arm]
+    goarm: ['7']
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
