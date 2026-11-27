@@ -24,8 +24,8 @@ import (
 	"github.com/t0mer/mashov2go/internal/api"
 	"github.com/t0mer/mashov2go/internal/auth"
 	"github.com/t0mer/mashov2go/internal/crypto"
-	"github.com/t0mer/mashov2go/internal/mashov"
 	"github.com/t0mer/mashov2go/internal/gradesjob"
+	"github.com/t0mer/mashov2go/internal/mashov"
 	"github.com/t0mer/mashov2go/internal/mashovsource"
 	"github.com/t0mer/mashov2go/internal/metrics"
 	"github.com/t0mer/mashov2go/internal/outbox"
@@ -423,7 +423,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 		scheduler.Run(ctx, time.Minute, log,
 			scheduler.Job{Name: "daily_plan", Run: plan.RunDue},
 			scheduler.Job{Name: "telegram_bind", Run: bind.RunOnce},
-		scheduler.Job{Name: "grades", Run: grades.RunDue},
+			scheduler.Job{Name: "grades", Run: grades.RunDue},
 			scheduler.Job{Name: "outbox", Run: worker.RunOnce},
 			scheduler.Job{Name: "session_purge", Run: func(ctx context.Context) (int, error) {
 				return 0, st.PurgeExpiredUISessions(ctx, time.Now())
