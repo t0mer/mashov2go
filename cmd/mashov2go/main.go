@@ -372,7 +372,9 @@ func cmdRun(args []string, stderr io.Writer) error {
 	// One Mashov source serves both the API and the plan job, so they share sessions.
 	mashovData := &mashovsource.Source{Store: st}
 	reg := metrics.NewRegistry()
-	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, ChildData: mashovData, Metrics: reg,
+	// One broker: the syncs publish new events and the API streams them.
+	broker := syncer.NewBroker()
+	apiSrv := &api.Server{Store: st, Settings: live, Plans: mashovData, ChildData: mashovData, Metrics: reg, Broker: broker,
 		SecureCookies: !*insecureCookies, TrustedProxies: trusted}
 	// The API owns /api, /healthz and /metrics; everything else is the admin UI.
 	root := http.NewServeMux()
@@ -412,7 +414,7 @@ func cmdRun(args []string, stderr io.Writer) error {
 	}
 	children := &childsync.Service{
 		Store:     st,
-		Syncer:    &syncer.Syncer{Store: st},
+		Syncer:    &syncer.Syncer{Store: st, Broker: broker},
 		Loc:       jerusalem,
 		Templates: templates.Renderer{Store: st},
 		Domains: []childsync.Domain{
