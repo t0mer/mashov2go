@@ -4,7 +4,7 @@ import { App } from './App';
 import { I18nProvider } from './i18n';
 import './styles.css';
 
-const savedLang = localStorage.getItem('m2g-lang') === 'en' ? 'en' : 'he';
+const savedLang = localStorage.getItem('m2g-lang') === 'he' ? 'he' : 'en';
 document.documentElement.lang = savedLang;
 document.documentElement.dir = savedLang === 'he' ? 'rtl' : 'ltr';
 

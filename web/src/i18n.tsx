@@ -166,7 +166,7 @@ const Ctx = createContext<I18nValue | null>(null);
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     const saved = localStorage.getItem('m2g-lang');
-    return saved === 'en' ? 'en' : 'he';
+    return saved === 'he' ? 'he' : 'en';
   });
   const value = useMemo<I18nValue>(() => {
     const idx = lang === 'he' ? 1 : 0;
