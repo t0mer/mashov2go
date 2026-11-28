@@ -6,7 +6,6 @@ export type Lang = 'he' | 'en';
 
 const S = {
   appName: ['mashov2go', 'mashov2go'],
-  activity: ['Activity', 'פעילות'],
   family: ['Family', 'משפחה'],
   accounts: ['Mashov accounts', 'חשבונות משו"ב'],
   channels: ['Channels', 'ערוצים'],
@@ -105,8 +104,6 @@ const S = {
   tokenShownOnce: ['Copy this token now. It will not be shown again.', 'העתיקו את הטוקן עכשיו. לא יוצג שוב.'],
   revoke: ['Revoke', 'ביטול'],
   revoked: ['Revoked', 'בוטל'],
-  eventsTitle: ['Events', 'אירועים'],
-  deliveriesTitle: ['Deliveries', 'הודעות יוצאות'],
   category: ['Category', 'קטגוריה'],
   status: ['Status', 'סטטוס'],
   allStatuses: ['All', 'הכול'],

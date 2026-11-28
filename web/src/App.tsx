@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { api, setCsrf, type Me } from './api';
 import { useI18n } from './i18n';
 import { Login } from './pages/Login';
-import { Activity } from './pages/Activity';
 import { Family } from './pages/Family';
 import { Accounts } from './pages/Accounts';
 import { Channels } from './pages/Channels';
 import { SettingsPage } from './pages/SettingsPage';
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready';
-type Tab = 'activity' | 'family' | 'accounts' | 'channels' | 'settings';
+type Tab = 'family' | 'accounts' | 'channels' | 'settings';
 type ThemeChoice = 'system' | 'light' | 'dark';
 
 function applyTheme(choice: ThemeChoice): void {
@@ -20,7 +19,7 @@ function applyTheme(choice: ThemeChoice): void {
 export function App() {
   const { t, lang, setLang } = useI18n();
   const [phase, setPhase] = useState<Phase>('loading');
-  const [tab, setTab] = useState<Tab>('activity');
+  const [tab, setTab] = useState<Tab>('family');
   const [me, setMe] = useState<Me | null>(null);
   const [theme, setTheme] = useState<ThemeChoice>(
     () => (localStorage.getItem('m2g-theme') as ThemeChoice | null) ?? 'system',
@@ -74,7 +73,6 @@ export function App() {
   }
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'activity', label: t('activity') },
     { key: 'family', label: t('family') },
     { key: 'accounts', label: t('accounts') },
     { key: 'channels', label: t('channels') },
@@ -121,7 +119,6 @@ export function App() {
         </div>
       </header>
       <main>
-        {tab === 'activity' && <Activity />}
         {tab === 'family' && <Family />}
         {tab === 'accounts' && <Accounts />}
         {tab === 'channels' && <Channels />}
