@@ -15,9 +15,8 @@ import (
 
 // Syncer writes fetch results and events.
 type Syncer struct {
-	Store  *store.Store
-	Broker *Broker // optional; receives each new event after it is stored
-	Now    func() time.Time
+	Store *store.Store
+	Now   func() time.Time
 }
 
 // Result summarises one applied fetch.
@@ -92,9 +91,6 @@ func (s *Syncer) Apply(ctx context.Context, accountID int64, childGUID, domain s
 			out.Updated++
 		}
 		out.Events = append(out.Events, ev)
-		if s.Broker != nil {
-			s.Broker.Publish(ev)
-		}
 	}
 	for _, c := range cur {
 		if err := s.Store.PutItem(ctx, store.Item{

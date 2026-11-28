@@ -78,7 +78,6 @@ func (s *Server) familyRoutes(mux *http.ServeMux, base, role string) {
 	}
 	if role == family.RoleChild {
 		s.planRoutes(mux, base)
-		s.childDataRoutes(mux, base)
 		s.handle(mux, "POST "+base+"/{id}/link", s.authed("admin", s.linkChild()))
 		s.handle(mux, "DELETE "+base+"/{id}/link", s.authed("admin", s.unlinkChild()))
 		s.handle(mux, "GET "+base+"/{id}/recipients", s.authed("read", s.getRecipients()))

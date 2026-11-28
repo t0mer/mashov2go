@@ -41,26 +41,6 @@ func TestDeliveryListAndRetry(t *testing.T) {
 		t.Fatalf("missing retry err = %v", err)
 	}
 }
-
-func TestEventsFilteredByCategory(t *testing.T) {
-	s := openTemp(t)
-	ctx := context.Background()
-	now := time.Date(2026, 11, 27, 10, 0, 0, 0, time.UTC)
-	_, _ = s.InsertEvent(ctx, Event{Category: "homework", Kind: "new", OccurredAt: now, DetectedAt: now, Source: "diff", DedupeKey: "a"})
-	_, _ = s.InsertEvent(ctx, Event{Category: "grades", Kind: "new", OccurredAt: now, DetectedAt: now, Source: "diff", DedupeKey: "b"})
-
-	hw, _ := s.ListEventsFiltered(ctx, "homework", now.Add(-time.Hour), 10)
-	if len(hw) != 1 || hw[0].Category != "homework" {
-		t.Fatalf("homework events = %+v", hw)
-	}
-	all, _ := s.ListEventsFiltered(ctx, "", now.Add(-time.Hour), 10)
-	if len(all) != 2 {
-		t.Fatalf("all events = %d", len(all))
-	}
-}
-
-// mustEnqueue creates an event with a unique key and a pending delivery for it,
-// and returns the delivery id.
 func mustEnqueue(t *testing.T, s *Store, memberID int64, n int) int64 {
 	t.Helper()
 	ctx := context.Background()

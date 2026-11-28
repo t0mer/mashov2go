@@ -19,7 +19,6 @@ import (
 	"github.com/t0mer/mashov2go/internal/planjob"
 	"github.com/t0mer/mashov2go/internal/settings"
 	"github.com/t0mer/mashov2go/internal/store"
-	"github.com/t0mer/mashov2go/internal/syncer"
 )
 
 const (
@@ -39,12 +38,8 @@ type Server struct {
 	// rate limiting (for example the local Cloudflare Tunnel connector).
 	TrustedProxies []netip.Prefix
 	Now            func() time.Time
-	// Broker publishes new events to the live stream (nil disables the stream).
-	Broker *syncer.Broker
 	// Metrics is served at /metrics (nil serves an empty exposition).
 	Metrics *metrics.Registry
-	// ChildData reads timetables and homework from Mashov (nil disables them).
-	ChildData ChildData
 	// PlanJob sends a child's plan on demand (nil disables the send endpoint).
 	PlanJob *planjob.Service
 	// Plans loads a child's school data for plan endpoints (nil disables them).
@@ -91,7 +86,6 @@ func (s *Server) Handler() http.Handler {
 	s.connectorRoutes(mux)
 	s.activityRoutes(mux)
 	s.templateRoutes(mux)
-	s.handle(mux, "GET /api/v1/events/stream", s.authed("read", http.HandlerFunc(s.eventStream)))
 	if s.Settings != nil {
 		s.settingsRoutes(mux)
 	}

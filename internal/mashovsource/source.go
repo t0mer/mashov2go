@@ -45,16 +45,6 @@ type Source struct {
 	lastPassword map[int64]time.Time
 }
 
-// Timetable returns the child's weekly timetable from Mashov.
-func (s *Source) Timetable(ctx context.Context, child family.Member) ([]mashov.Lesson, error) {
-	accountID, c, guid, err := s.forChild(ctx, child)
-	if err != nil {
-		return nil, err
-	}
-	out, err := c.Timetable(ctx, guid)
-	return out, s.expired(accountID, err)
-}
-
 // Homework returns the child's homework list from Mashov.
 func (s *Source) Homework(ctx context.Context, child family.Member) ([]mashov.HomeworkItem, error) {
 	accountID, c, guid, err := s.forChild(ctx, child)

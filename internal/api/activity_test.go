@@ -74,23 +74,6 @@ func TestDeliveriesFilterRetryAndValidation(t *testing.T) {
 	}
 }
 
-func TestEventsFilterByCategoryAndSince(t *testing.T) {
-	srv, h := newServer(t)
-	cookie, _ := signIn(t, h)
-	seedFailedDelivery(t, srv)
-
-	if rec := call(h, http.MethodGet, "/api/v1/events?category=homework", nil, cookie, nil); rec.Code != http.StatusOK ||
-		!contains(rec.Body.String(), `"category":"homework"`) {
-		t.Fatalf("events: %d %s", rec.Code, rec.Body.String())
-	}
-	if rec := call(h, http.MethodGet, "/api/v1/events?category=grades", nil, cookie, nil); strings.TrimSpace(rec.Body.String()) != "[]" {
-		t.Fatalf("grades should be empty: %s", rec.Body.String())
-	}
-	if rec := call(h, http.MethodGet, "/api/v1/events?since=yesterday", nil, cookie, nil); rec.Code != http.StatusBadRequest {
-		t.Fatalf("bad since: %d", rec.Code)
-	}
-}
-
 func TestActivityScopes(t *testing.T) {
 	srv, h := newServer(t)
 	cookie, csrf := signIn(t, h)
@@ -104,9 +87,6 @@ func TestActivityScopes(t *testing.T) {
 	}
 	if rec := call(h, http.MethodPost, "/api/v1/deliveries/"+itoa(id)+"/retry", nil, nil, bearer); rec.Code != http.StatusForbidden {
 		t.Fatalf("read token retrying: %d, want 403", rec.Code)
-	}
-	if rec := call(h, http.MethodGet, "/api/v1/events", nil, nil, nil); rec.Code != http.StatusUnauthorized {
-		t.Fatalf("anonymous events: %d", rec.Code)
 	}
 }
 

@@ -38,7 +38,6 @@ var deliveryStatuses = map[string]bool{
 func (s *Server) activityRoutes(mux *http.ServeMux) {
 	s.handle(mux, "GET /api/v1/deliveries", s.authed("read", http.HandlerFunc(s.listDeliveries)))
 	s.handle(mux, "POST /api/v1/deliveries/{id}/retry", s.authed("admin", http.HandlerFunc(s.retryDelivery)))
-	s.handle(mux, "GET /api/v1/events", s.authed("read", http.HandlerFunc(s.listEvents)))
 }
 
 // limitParam reads ?limit=, default 100 and at most 500.
@@ -96,35 +95,4 @@ func (s *Server) retryDelivery(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
-}
-
-// listEvents returns events detected since ?since= (RFC 3339, default 7 days
-// ago), optionally filtered by ?category=.
-func (s *Server) listEvents(w http.ResponseWriter, r *http.Request) {
-	since := s.now().Add(-7 * 24 * time.Hour)
-	if v := r.URL.Query().Get("since"); v != "" {
-		t, err := time.Parse(time.RFC3339, v)
-		if err != nil {
-			problem(w, http.StatusBadRequest, "Bad request", "since must be an RFC 3339 time")
-			return
-		}
-		since = t
-	}
-	limit, ok := limitParam(r)
-	if !ok {
-		problem(w, http.StatusBadRequest, "Bad request", "limit must be 1 to 500")
-		return
-	}
-	list, err := s.Store.ListEventsFiltered(r.Context(), r.URL.Query().Get("category"), since, limit)
-	if err != nil {
-		problem(w, http.StatusInternalServerError, "Internal error", "listing events failed")
-		return
-	}
-	out := make([]eventView, 0, len(list))
-	for _, e := range list {
-		out = append(out, eventView{ID: e.ID, Category: e.Category, Kind: e.Kind,
-			OccurredAt: e.OccurredAt.Format(time.RFC3339), DetectedAt: e.DetectedAt.Format(time.RFC3339),
-			Source: e.Source, Data: e.Data})
-	}
-	writeJSON(w, http.StatusOK, out)
 }

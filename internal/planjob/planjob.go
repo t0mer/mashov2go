@@ -18,7 +18,6 @@ import (
 	"github.com/t0mer/mashov2go/internal/routing"
 	"github.com/t0mer/mashov2go/internal/schedule"
 	"github.com/t0mer/mashov2go/internal/store"
-	"github.com/t0mer/mashov2go/internal/syncer"
 )
 
 // Category is the routing category of the daily plan.
@@ -51,8 +50,6 @@ type Service struct {
 	// category. Both are optional (nil disables counting).
 	PlansSent *metrics.Counter
 	Events    *metrics.Counter
-	// Broker receives each new plan event for the live stream (nil disables it).
-	Broker *syncer.Broker
 
 	lastLoad map[int64]time.Time
 	cache    map[int64]fetched
@@ -342,10 +339,6 @@ func (s *Service) recordKey(ctx context.Context, key, kind, dateStr string, now 
 	}
 	if inserted {
 		s.Events.Inc(Category)
-		if s.Broker != nil {
-			s.Broker.Publish(store.Event{Category: Category, Kind: kind, OccurredAt: now, DetectedAt: now,
-				Data: string(data), Source: "schedule", DedupeKey: key})
-		}
 	}
 	id, ok, err := s.Store.EventIDByDedupe(ctx, key)
 	if err != nil {

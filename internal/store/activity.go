@@ -48,28 +48,3 @@ func (s *Store) RetryDelivery(ctx context.Context, id int64, now time.Time) erro
 		now.UTC().Format(ts), id)
 	return err
 }
-
-// ListEventsFiltered returns events detected since the given time, newest first.
-// An empty category lists all categories.
-func (s *Store) ListEventsFiltered(ctx context.Context, category string, since time.Time, limit int) ([]Event, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, category, kind, child_guid, occurred_at, detected_at, data, source, dedupe_key
-		FROM events WHERE detected_at >= ? AND (? = '' OR category = ?) ORDER BY id DESC LIMIT ?`,
-		since.UTC().Format(ts), category, category, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Event
-	for rows.Next() {
-		var e Event
-		var occ, det string
-		if err := rows.Scan(&e.ID, &e.Category, &e.Kind, &e.ChildGUID, &occ, &det, &e.Data, &e.Source, &e.DedupeKey); err != nil {
-			return nil, err
-		}
-		e.OccurredAt, _ = time.Parse(ts, occ)
-		e.DetectedAt, _ = time.Parse(ts, det)
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}

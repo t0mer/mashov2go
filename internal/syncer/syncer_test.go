@@ -37,22 +37,14 @@ func raws(s ...string) []json.RawMessage {
 
 func TestBaselineIsSilentThenChangesEmitOnce(t *testing.T) {
 	st, acc := newStore(t)
-	broker := NewBroker()
-	ch, cancel := broker.Subscribe()
-	defer cancel()
 	now := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
-	sy := &Syncer{Store: st, Broker: broker, Now: func() time.Time { return now }}
+	sy := &Syncer{Store: st, Now: func() time.Time { return now }}
 	ctx := context.Background()
 
 	// First sync: existing homework is stored, nothing is announced.
 	r1, err := sy.Apply(ctx, acc, "c1", "homework", raws(`{"lessonId":1,"homework":"p1","subjectName":"Math","lessonDate":"2026-11-25T00:00:00"}`))
 	if err != nil || !r1.Baseline || len(r1.Events) != 0 {
 		t.Fatalf("baseline result = %+v, err %v", r1, err)
-	}
-	select {
-	case ev := <-ch:
-		t.Fatalf("baseline published an event: %+v", ev)
-	default:
 	}
 
 	// Second sync: one new item and one edited item.
@@ -62,14 +54,6 @@ func TestBaselineIsSilentThenChangesEmitOnce(t *testing.T) {
 	))
 	if err != nil || r2.Baseline || r2.New != 1 || r2.Updated != 1 {
 		t.Fatalf("second result = %+v, err %v", r2, err)
-	}
-	select {
-	case ev := <-ch:
-		if ev.Category != "homework" {
-			t.Fatalf("event category = %q", ev.Category)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("no event published to broker")
 	}
 
 	// Third sync with identical data: no new events.

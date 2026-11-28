@@ -3,7 +3,6 @@ package planjob
 import (
 	"context"
 	"errors"
-	"github.com/t0mer/mashov2go/internal/syncer"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -259,26 +258,5 @@ func TestTomorrowTextForChildAndSkipReason(t *testing.T) {
 	text, skip, err = svc2.TomorrowText(context.Background(), child2)
 	if err != nil || skip == "" || text != "" {
 		t.Fatalf("holiday: text=%q skip=%q err=%v", text, skip, err)
-	}
-}
-
-func TestPlanEventsArePublishedToTheBroker(t *testing.T) {
-	src := &fakeSource{lessons: []mashov.Lesson{lesson(1, "Math")}}
-	svc, _, _ := setup(t, src, "972500000001")
-	broker := syncer.NewBroker()
-	ch, cancel := broker.Subscribe()
-	defer cancel()
-	svc.Broker = broker
-	svc.Now = func() time.Time { return at(19, 30) }
-	if _, err := svc.RunDue(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case ev := <-ch:
-		if ev.Category != Category || ev.Kind != "plan" {
-			t.Fatalf("published %+v", ev)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("no plan event published")
 	}
 }

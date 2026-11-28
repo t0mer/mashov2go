@@ -242,22 +242,18 @@ func TestFirstName(t *testing.T) {
 	}
 }
 
-func TestTimetableAndHomeworkReads(t *testing.T) {
+func TestHomeworkReadAndUnlinkedRejected(t *testing.T) {
 	fake := &fakeMashov{}
 	src, _, _, kid := setup(t, fake)
 	ctx := context.Background()
 
-	lessons, err := src.Timetable(ctx, kid)
-	if err != nil || len(lessons) != 1 || lessons[0].GroupDetails.SubjectName != "Math" {
-		t.Fatalf("timetable: %+v %v", lessons, err)
-	}
 	homework, err := src.Homework(ctx, kid)
 	if err != nil || len(homework) != 0 {
 		t.Fatalf("homework: %+v %v", homework, err)
 	}
 	loose := childMember("Dana")
 	loose.ID = 999
-	if _, err := src.Timetable(ctx, loose); !errors.Is(err, ErrNotLinked) {
-		t.Fatalf("unlinked timetable err = %v", err)
+	if _, err := src.Homework(ctx, loose); !errors.Is(err, ErrNotLinked) {
+		t.Fatalf("unlinked homework err = %v", err)
 	}
 }
