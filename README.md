@@ -14,10 +14,6 @@ your LAN.
 
 ## Screenshots
 
-| Activity (light) | Activity (dark) |
-|---|---|
-| ![Activity, light](assets/screenshots/activity-light.png) | ![Activity, dark](assets/screenshots/activity-dark.png) |
-
 | Family (light) | Family (dark) |
 |---|---|
 | ![Family, light](assets/screenshots/family-light.png) | ![Family, dark](assets/screenshots/family-dark.png) |
@@ -50,9 +46,11 @@ screen is in `assets/screenshots/login-light.png`.
 - **Delivery.** Messages go through a queue with retries (30 s, 2 min, 10 min,
   1 h; six attempts at most). A permanent provider error fails at once, and an
   optional fallback channel is tried once. Failed and skipped deliveries can be
-  retried from the UI or the API.
-- **Admin UI and REST API.** A Hebrew right-to-left UI (English available),
-  with light and dark themes. The API is documented in OpenAPI.
+  retried through the API (`POST /api/v1/deliveries/{id}/retry`).
+- **Settings UI and REST API.** The web UI is for settings only: the family,
+  Mashov accounts, channels, message templates and API tokens. It is Hebrew
+  right-to-left by default (English available), with light and dark themes.
+  The API is documented in OpenAPI.
 - **Operations.** Prometheus counters at `/metrics` (needs a read-scope API
   token), a health check at `/healthz`, and a single static binary (no CGO)
   with a container image.
