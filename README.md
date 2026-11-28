@@ -48,8 +48,9 @@ screen is in `assets/screenshots/login-light.png`.
   optional fallback channel is tried once. Failed and skipped deliveries can be
   retried through the API (`POST /api/v1/deliveries/{id}/retry`).
 - **Settings UI and REST API.** The web UI is for settings only: the family,
-  Mashov accounts, channels, message templates and API tokens. It is Hebrew
-  right-to-left by default (English available), with light and dark themes.
+  Mashov accounts, channels, message templates and API tokens. It is English
+  and left-to-right by default (Hebrew right-to-left is available), with light
+  and dark themes.
   The API is documented in OpenAPI.
 - **Operations.** Prometheus counters at `/metrics` (needs a read-scope API
   token), a health check at `/healthz`, and a single static binary (no CGO)
